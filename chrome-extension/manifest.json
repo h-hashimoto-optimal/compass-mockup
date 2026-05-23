@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Compass ASIN Collector",
+  "version": "0.1.0",
+  "description": "Amazon.co.jp の検索結果からASINを自動収集し、Compassへ送信します",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://www.amazon.co.jp/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_title": "Compass ASIN Collector",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.amazon.co.jp/s*",
+        "https://www.amazon.co.jp/s/*",
+        "https://www.amazon.co.jp/dp/*",
+        "https://www.amazon.co.jp/*/dp/*",
+        "https://www.amazon.co.jp/gp/product/*",
+        "https://www.amazon.co.jp/gp/aw/d/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
