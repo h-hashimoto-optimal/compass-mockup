@@ -150,10 +150,6 @@ export function ListingsClient() {
   const doSync = async (id: string) => { const r = await act(id, 'reconcile'); setMsg(r.ok ? '状態同期しました' : '同期：対象外（送信済みのみ）'); load(); };
   const doDelete = async (id: string) => { if (!confirm('この出品を削除しますか？')) return; setB(`${id}:delete`, true); await fetch(`/api/listings/${id}`, { method: 'DELETE' }); setB(`${id}:delete`, false); load(); };
 
-  const saveField = async (id: string, field: 'titleTranslated' | 'listPrice', value: string) => {
-    await fetch(`/api/listings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: value }) });
-  };
-
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const allSel = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
   const toggleAll = () => setSelected(allSel ? new Set() : new Set(filtered.map((l) => l.id)));
@@ -258,15 +254,16 @@ export function ListingsClient() {
                       {l.sourceInStock === false && <Badge variant="destructive">在庫なし</Badge>}
                       {l.floorPriceJpy != null && l.sourcePriceJpy != null && l.sourcePriceJpy > l.floorPriceJpy && <Badge variant="destructive">赤字</Badge>}
                     </div>
-                    <Link href={`/listings/${l.id}`} className="text-sm font-medium truncate block hover:underline">{l.titleTranslated || l.titleJa || '(未取得)'}</Link>
-                    <Input className="h-7 text-xs" defaultValue={l.titleTranslated ?? ''} placeholder="韓国語タイトル（処理で自動／手動編集可）" onBlur={(e) => e.target.value !== (l.titleTranslated ?? '') && saveField(l.id, 'titleTranslated', e.target.value)} />
+                    <Link href={`/listings/${l.id}`} className="text-sm font-medium truncate block hover:underline">{l.titleJa || '(未取得)'}</Link>
+                    <div className="text-xs truncate">
+                      <span className="text-muted-foreground">韓国語：</span>
+                      {l.titleTranslated ? l.titleTranslated : <span className="text-amber-600">（未翻訳・出品準備で翻訳）</span>}
+                    </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>仕入 {yen(l.sourcePriceJpy)}</span>
-                      <span className="flex items-center gap-1">売価
-                        <Input className="h-6 w-24 text-xs" defaultValue={l.listPrice ?? ''} onBlur={(e) => Number(e.target.value.replace(/[^0-9]/g, '')) !== (l.listPrice ?? 0) && saveField(l.id, 'listPrice', e.target.value)} />
-                        {l.listCurrency}
-                      </span>
+                      <span>売価 {krw(l.listPrice, l.listCurrency)}</span>
                       <span>下限 {yen(l.floorPriceJpy)}</span>
+                      <Link href={`/listings/${l.id}`} className="text-primary hover:underline">編集</Link>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">

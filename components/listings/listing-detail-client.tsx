@@ -130,16 +130,22 @@ export function ListingDetailClient({ id }: { id: string }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader className="text-sm font-medium">編集</CardHeader>
+            <CardHeader className="text-sm font-medium">{a.canProcess ? '編集' : '内容（送信済みのため編集不可）'}</CardHeader>
             <CardContent className="space-y-3">
-              <Field label="商品名（日本語）"><Input value={titleJa} onChange={(e) => setTitleJa(e.target.value)} /></Field>
-              <Field label="商品名（韓国語・翻訳後）"><Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} /></Field>
+              {!a.canProcess && (
+                <div className="flex items-start gap-2 rounded-md bg-muted/50 text-muted-foreground text-xs p-2">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  送信済み（審査中／販売中）のため編集できません。変更が必要な場合はCoupang側の操作（停止/修正）または却下後に対応します。
+                </div>
+              )}
+              <Field label="商品名（日本語）"><Input value={titleJa} onChange={(e) => setTitleJa(e.target.value)} disabled={!a.canProcess} /></Field>
+              <Field label="商品名（韓国語・翻訳後）"><Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} disabled={!a.canProcess} /></Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label={`販売価格（${d.listCurrency}）`}><Input value={listPrice} onChange={(e) => setListPrice(e.target.value)} /></Field>
-                <Field label="赤字下限（円）"><Input value={floor} onChange={(e) => setFloor(e.target.value)} /></Field>
+                <Field label={`販売価格（${d.listCurrency}）`}><Input value={listPrice} onChange={(e) => setListPrice(e.target.value)} disabled={!a.canProcess} /></Field>
+                <Field label="赤字下限（円）"><Input value={floor} onChange={(e) => setFloor(e.target.value)} disabled={!a.canProcess} /></Field>
               </div>
               <div className="flex items-center gap-3">
-                <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>
+                {a.canProcess && <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>}
                 {saved && <span className="text-sm text-green-600">保存しました</span>}
                 <Button variant="destructive" size="sm" className="ml-auto" onClick={remove} disabled={!!busy}><Trash2 className="h-4 w-4" />削除</Button>
               </div>

@@ -1,7 +1,7 @@
 // テナント・スコープのデータアクセス層（仕入商品→出品）。
 // channel_listings は RLS 対象 → withTenant 経由（app.current_tenant をセット）。
 // アプリ層でも tenant_id で絞り、soft-delete(deleted_at IS NULL) を強制する＝二重の漏洩防止。
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, or } from 'drizzle-orm';
 import { withTenant } from '@/lib/db';
 import { sourceProducts, channelListings, ingestBatches } from '@/lib/db/schema';
 import { isBlacklisted } from '@/lib/data/lists';
@@ -109,6 +109,8 @@ export async function updateListing(
           eq(channelListings.id, id),
           eq(channelListings.tenantId, tenantId),
           isNull(channelListings.deletedAt),
+          // 送信済み（却下以外のsubmitted）は編集不可＝Coupang連携内容とのズレを防ぐ
+          or(ne(channelListings.status, 'submitted'), eq(channelListings.coupangApprovalStatus, 'rejected')),
         ),
       )
       .returning();
