@@ -139,6 +139,14 @@ export function ListingsClient() {
       return n;
     });
 
+  const doReconcile = async () => {
+    setMsg('Coupangと状態同期中…');
+    const r = await fetch('/api/tenant/reconcile', { method: 'POST' });
+    const j = await r.json();
+    setMsg(r.ok ? `状態同期：${j.updated ?? 0}/${j.scanned ?? 0}件を更新` : '状態同期に失敗');
+    load();
+  };
+
   const bulk = async (action: 'process' | 'submit') => {
     const ids = [...selected];
     if (!ids.length) return;
@@ -190,6 +198,10 @@ export function ListingsClient() {
         <Button variant="outline" size="sm" onClick={load}>
           <RefreshCw className="h-3.5 w-3.5" />
           更新
+        </Button>
+        <Button variant="outline" size="sm" onClick={doReconcile} title="送信済みの出品のCoupang承認/販売ステータスを取り込む">
+          <RefreshCw className="h-3.5 w-3.5" />
+          状態同期
         </Button>
         {selected.size > 0 && (
           <>
