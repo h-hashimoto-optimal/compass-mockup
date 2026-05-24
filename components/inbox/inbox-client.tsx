@@ -30,7 +30,7 @@ type Item = {
 
 const yen = (n: number | null) => (n == null ? '—' : `¥${n.toLocaleString('ja-JP')}`);
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
-const statusJa: Record<string, string> = { draft: '未処理', pending: '出品準備済', live: '出品中', stopped: '停止', rejected: '却下', error: 'エラー' };
+const statusJa: Record<string, string> = { draft: '未処理', pending: '送信待ち', live: '出品中', stopped: '停止', rejected: '却下', error: 'エラー' };
 
 export function InboxClient() {
   const [batches, setBatches] = React.useState<Batch[]>([]);
@@ -99,7 +99,7 @@ export function InboxClient() {
     const ok = (j.results ?? []).filter((x: { ok: boolean }) => x.ok).length;
     setBusy(false);
     setSel(new Set());
-    setDone(`${ok}件を出品準備しました（出品管理へ）`);
+    setDone(`${ok}件を翻訳・価格計算しました（送信待ち）。まだCoupangには送信していません ―送信は「出品管理」/「一括出品」で。`);
     reloadItems();
     loadBatches();
   };
@@ -135,14 +135,14 @@ export function InboxClient() {
       <div className="max-w-4xl mx-auto space-y-4">
         <button onClick={() => setOpen(null)} className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" />取得グループ一覧へ</button>
         <div>
-          <h1 className="text-xl font-semibold">{open.query || '（商品ページ取得）'}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{dt(open.capturedAt || open.createdAt)} 取得 ・ {open.total}件 ・ 出品したい商品を選んで「Coupang出品へ」</p>
+          <h1 className="text-xl font-semibold">{open.query ? `検索「${open.query}」` : '（商品ページ取得）'}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{dt(open.capturedAt || open.createdAt)} 取得 ・ {open.total}件 ・ 出品したい商品を選んで「出品準備」（翻訳・価格計算）。実際のCoupang送信は出品管理で。</p>
         </div>
 
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={allSel} onChange={toggleAll} />未処理を全選択</label>
           <Button size="sm" className="ml-auto" disabled={busy || sel.size === 0} onClick={registerSelected}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}選択をCoupang出品へ（{sel.size}）
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}選択を出品準備（{sel.size}）
           </Button>
         </div>
         {done && (

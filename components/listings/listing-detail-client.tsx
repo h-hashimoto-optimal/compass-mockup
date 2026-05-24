@@ -18,6 +18,7 @@ type Detail = {
   source: string; sourceProductId: string; sourceUrl: string | null;
   sourcePriceJpy: number | null; sourceInStock: boolean | null;
   sourceCheckedAt: string | null;
+  batchQuery: string | null; batchCapturedAt: string | null;
 };
 type Preview = {
   preview: { brand: string; ipBrand: { brand: string; level: string } | null; category: string; images: string[] };
@@ -192,6 +193,8 @@ export function ListingDetailClient({ id }: { id: string }) {
             <CardContent className="text-sm space-y-1.5">
               <Row k="モール" v={d.source} />
               <Row k="商品コード" v={d.sourceProductId} />
+              <Row k="取得元" v={d.batchQuery ? `検索「${d.batchQuery}」` : '手動追加'} />
+              {d.batchCapturedAt && <Row k="取得日時" v={formatDateTime(d.batchCapturedAt)} />}
               <Row k="在庫" v={d.sourceInStock === false ? '欠品' : d.sourceInStock === true ? 'あり' : '—'} />
               <Row k="最終取得" v={d.sourceCheckedAt ? formatDateTime(d.sourceCheckedAt) : '未取得'} />
               {d.sourceUrl && <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline text-xs">仕入元ページを開く</a>}

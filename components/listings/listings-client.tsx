@@ -20,6 +20,8 @@ type Listing = {
   sourceProductId: string;
   sourcePriceJpy: number | null;
   sourceInStock: boolean | null;
+  batchQuery: string | null;
+  batchCapturedAt: string | null;
 };
 
 type PreviewData = {
@@ -37,6 +39,15 @@ const STATUS_STYLE: Record<string, string> = {
   stopped: 'bg-amber-100 text-amber-700',
   rejected: 'bg-red-100 text-red-700',
   error: 'bg-red-100 text-red-700',
+};
+// pending=翻訳・価格計算済みで「送信待ち」。実際のCoupang送信は「送信」ボタンで（今は鍵未設定でdry-run）
+const STATUS_LABEL: Record<string, string> = {
+  draft: '未処理',
+  pending: '送信待ち',
+  live: '出品中',
+  stopped: '停止',
+  rejected: '却下',
+  error: 'エラー',
 };
 
 export function ListingsClient() {
@@ -219,8 +230,9 @@ export function ListingsClient() {
                 <input type="checkbox" className="mt-1.5" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`badge rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[l.status] ?? 'bg-slate-100 text-slate-600'}`}>{l.status}</span>
+                    <span className={`badge rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[l.status] ?? 'bg-slate-100 text-slate-600'}`}>{STATUS_LABEL[l.status] ?? l.status}</span>
                     <code className="text-xs text-muted-foreground">{l.sourceProductId}</code>
+                    {l.batchQuery && <Badge variant="muted">検索「{l.batchQuery}」</Badge>}
                     {l.sourceInStock === false && <Badge variant="destructive">在庫なし</Badge>}
                     {l.floorPriceJpy != null && l.sourcePriceJpy != null && l.sourcePriceJpy > l.floorPriceJpy && <Badge variant="destructive">赤字</Badge>}
                   </div>

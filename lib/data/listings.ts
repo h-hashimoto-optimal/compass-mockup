@@ -3,7 +3,7 @@
 // アプリ層でも tenant_id で絞り、soft-delete(deleted_at IS NULL) を強制する＝二重の漏洩防止。
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { withTenant } from '@/lib/db';
-import { sourceProducts, channelListings } from '@/lib/db/schema';
+import { sourceProducts, channelListings, ingestBatches } from '@/lib/db/schema';
 import { isBlacklisted } from '@/lib/data/lists';
 
 export type IngestInput = {
@@ -155,11 +155,14 @@ export async function getTenantListing(tenantId: string, id: string) {
         sourceInStock: sourceProducts.lastInStock,
         sourceRaw: sourceProducts.raw,
         sourceCheckedAt: sourceProducts.lastCheckedAt,
+        batchQuery: ingestBatches.query,
+        batchCapturedAt: ingestBatches.capturedAt,
         createdAt: channelListings.createdAt,
         updatedAt: channelListings.updatedAt,
       })
       .from(channelListings)
       .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .leftJoin(ingestBatches, eq(channelListings.ingestBatchId, ingestBatches.id))
       .where(
         and(
           eq(channelListings.id, id),
@@ -189,10 +192,13 @@ export async function listTenantListings(tenantId: string) {
         sourceProductId: sourceProducts.sourceProductId,
         sourcePriceJpy: sourceProducts.lastPriceJpy,
         sourceInStock: sourceProducts.lastInStock,
+        batchQuery: ingestBatches.query,
+        batchCapturedAt: ingestBatches.capturedAt,
         createdAt: channelListings.createdAt,
       })
       .from(channelListings)
       .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .leftJoin(ingestBatches, eq(channelListings.ingestBatchId, ingestBatches.id))
       .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)))
       .orderBy(desc(channelListings.createdAt)),
   );
