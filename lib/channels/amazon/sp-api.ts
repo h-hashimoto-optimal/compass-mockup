@@ -22,6 +22,7 @@ export type AmazonProductDetail = {
   description: string;
   category: string | null;
   priceJpy: number | null;
+  weightG: number | null; // 商品重量（g）。配送料計算に使用
   inStock: boolean;
   fetchedAt: string;
   source: 'mock' | 'sp-api';
@@ -93,6 +94,7 @@ function mockFetch(
     description: `【${brand}】${title}\n\n日本国内で広く流通している人気商品。当日発送可能。`,
     category: guessCategory(title),
     priceJpy,
+    weightG: deterministicWeight(asin),
     inStock: true,
     fetchedAt: new Date().toISOString(),
     source: 'mock',
@@ -102,6 +104,11 @@ function mockFetch(
 function deterministicPrice(asin: string): number {
   const sum = asin.split('').reduce((s, c) => s + c.charCodeAt(0), 0);
   return 980 + (sum % 50) * 100; // 980〜5,880円
+}
+
+function deterministicWeight(asin: string): number {
+  const sum = asin.split('').reduce((s, c) => s + c.charCodeAt(0), 0);
+  return 100 + (sum % 30) * 100; // 100〜3,000g（mock。SP-API実装後は実重量）
 }
 
 function guessBrandFromTitle(title: string): string | null {

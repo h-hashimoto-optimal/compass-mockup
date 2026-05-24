@@ -147,6 +147,7 @@ export const channelListings = pgTable(
     coupangApprovalStatus: text('coupang_approval_status'), // 承認: requested/approved/partial_approved/rejected/deleted
     coupangSalesStatus: text('coupang_sales_status'), // 販売: on_sale/suspended/soldout
     marginOverride: numeric('margin_override', { precision: 6, scale: 4 }), // 商品個別の利益率(rate)。null=テナント既定
+    weightGOverride: integer('weight_g_override'), // 商品個別の重量(g)上書き。null=取得値を使用
     coupangCategoryCode: integer('coupang_category_code'), // カテゴリ手動上書き（displayCategoryCode）
     coupangCategoryName: text('coupang_category_name'),
     rejectedReason: text('rejected_reason'),
@@ -253,6 +254,7 @@ export const tenantSettings = pgTable('tenant_settings', {
   marginRate: numeric('margin_rate', { precision: 6, scale: 4 }).notNull().default('0.25'),
   fxBuffer: numeric('fx_buffer', { precision: 6, scale: 4 }).notNull().default('0.03'),
   domesticShippingJpy: integer('domestic_shipping_jpy').notNull().default(0),
+  shippingRatesJson: jsonb('shipping_rates_json'), // 重量帯別 国際配送料 [{maxG,feeJpy}]。null=既定(HANIRO)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

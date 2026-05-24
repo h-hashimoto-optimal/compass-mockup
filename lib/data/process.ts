@@ -13,6 +13,7 @@ import { fetchAmazonProduct } from '@/lib/channels/amazon/sp-api';
 import { translateJaToKo } from '@/lib/translation/translate';
 import { computeListingPricing } from './pricing';
 import { listNgWords, applyNgWords } from '@/lib/data/lists';
+import { shippingFeeForWeight } from '@/lib/shipping';
 import { DEFAULTS } from '@/lib/constants';
 
 const num = (v: unknown, d: number) => {
@@ -36,6 +37,7 @@ export async function processListing(tenantId: string, listingId: string) {
       status: channelListings.status,
       coupangApprovalStatus: channelListings.coupangApprovalStatus,
       marginOverride: channelListings.marginOverride,
+      weightGOverride: channelListings.weightGOverride,
       titleJa: channelListings.titleJa,
       sourceRowId: sourceProducts.id,
       source: sourceProducts.source,
@@ -101,12 +103,17 @@ export async function processListing(tenantId: string, listingId: string) {
     .limit(1);
   const fxRate = await getFxJpyToKrw();
 
+  // 重量(g)＝個別上書き優先→取得値。重量別の国際配送料をテナントの料金表から算出。
+  const weightG = row.weightGOverride != null ? row.weightGOverride : detail.weightG ?? null;
+  const intlShippingJpy = shippingFeeForWeight(weightG, (ts?.shippingRatesJson as unknown as []) ?? []);
+
   // 5. 価格＋赤字下限
   const { listPrice, floorPriceJpy } = computeListingPricing(detail.priceJpy ?? 0, {
     // 商品個別の利益率上書きがあれば優先、無ければテナント既定
     marginRate: row.marginOverride != null ? num(row.marginOverride, DEFAULTS.marginRate) : num(ts?.marginRate, DEFAULTS.marginRate),
     fxBuffer: num(ts?.fxBuffer, DEFAULTS.fxBuffer),
     domesticShippingJpy: num(ts?.domesticShippingJpy, DEFAULTS.domesticShippingJpy),
+    intlShippingJpy,
     sellFeeRate: num(cs?.sellFeeRate, DEFAULTS.sellFeeRate[row.channel as keyof typeof DEFAULTS.sellFeeRate] ?? 0.11),
     priceRounding: num(cs?.priceRounding, DEFAULTS.priceRoundingKrw),
     fxRate,

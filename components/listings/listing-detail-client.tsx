@@ -21,7 +21,8 @@ type Detail = {
   sourcePriceJpy: number | null; sourceInStock: boolean | null;
   sourceCheckedAt: string | null;
   batchQuery: string | null; batchCapturedAt: string | null;
-  marginOverride: string | null; coupangCategoryCode: number | null; coupangCategoryName: string | null;
+  marginOverride: string | null; weightGOverride: number | null; coupangCategoryCode: number | null; coupangCategoryName: string | null;
+  sourceRaw?: unknown;
 };
 type Preview = {
   preview: { brand: string; ipBrand: { brand: string; level: string } | null; category: string; images: string[] };
@@ -38,6 +39,7 @@ export function ListingDetailClient({ id }: { id: string }) {
   const [listPrice, setListPrice] = React.useState('');
   const [floor, setFloor] = React.useState('');
   const [marginPct, setMarginPct] = React.useState('');
+  const [weightG, setWeightG] = React.useState('');
   const [catCode, setCatCode] = React.useState('');
   const [catName, setCatName] = React.useState('');
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -55,6 +57,7 @@ export function ListingDetailClient({ id }: { id: string }) {
       setListPrice(x.listPrice != null ? String(x.listPrice) : '');
       setFloor(x.floorPriceJpy != null ? String(x.floorPriceJpy) : '');
       setMarginPct(x.marginOverride != null ? String(Math.round(Number(x.marginOverride) * 1000) / 10) : '');
+      setWeightG(x.weightGOverride != null ? String(x.weightGOverride) : '');
       setCatCode(x.coupangCategoryCode != null ? String(x.coupangCategoryCode) : '');
       setCatName(x.coupangCategoryName ?? '');
     });
@@ -68,6 +71,7 @@ export function ListingDetailClient({ id }: { id: string }) {
       body: JSON.stringify({
         titleJa, titleTranslated: titleKo, listPrice, floorPriceJpy: floor,
         marginOverride: marginPct.trim() === '' ? null : (Number(marginPct) || 0) / 100,
+        weightGOverride: weightG.trim() === '' ? null : weightG,
         coupangCategoryCode: catCode.trim() === '' ? null : catCode,
         coupangCategoryName: catName.trim() === '' ? null : catName,
       }),
@@ -168,8 +172,9 @@ export function ListingDetailClient({ id }: { id: string }) {
             <CardHeader className="text-sm font-medium">出品調整（この商品だけ）</CardHeader>
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">利益率は空欄＝店舗の既定値。カテゴリは空欄＝自動推定。変更後は「出品準備」で売価/カテゴリに反映されます。</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field label="利益率上書き（%）"><Input value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder="既定" disabled={!a.canProcess} /></Field>
+                <Field label="重量上書き（g）"><Input value={weightG} onChange={(e) => setWeightG(e.target.value)} placeholder={(() => { const w = (d.sourceRaw as { weightG?: number } | null)?.weightG; return w ? `取得 ${w}g` : '取得値'; })()} disabled={!a.canProcess} /></Field>
                 <Field label="カテゴリコード"><Input value={catCode} onChange={(e) => setCatCode(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
                 <Field label="カテゴリ名"><Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
               </div>
@@ -228,7 +233,7 @@ export function ListingDetailClient({ id }: { id: string }) {
             <CardContent className="text-sm space-y-1.5">
               <Row k="モール" v={d.source} />
               <Row k="商品コード" v={d.sourceProductId} />
-              <Row k="取得元" v={d.batchQuery ? `検索「${d.batchQuery}」` : '手動追加'} />
+              <Row k="検索KW" v={d.batchQuery || '（手動／商品ページ取得）'} />
               {d.batchCapturedAt && <Row k="取得日時" v={formatDateTime(d.batchCapturedAt)} />}
               <Row k="在庫" v={d.sourceInStock === false ? '欠品' : d.sourceInStock === true ? 'あり' : '—'} />
               <Row k="最終取得" v={d.sourceCheckedAt ? formatDateTime(d.sourceCheckedAt) : '未取得'} />

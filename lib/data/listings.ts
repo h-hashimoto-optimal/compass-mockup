@@ -106,6 +106,7 @@ export async function updateListing(
         ? null
         : Math.min(Math.max(v, 0), 0.9).toFixed(4);
   }
+  if ('weightGOverride' in fields) set.weightGOverride = toIntOrNull(fields.weightGOverride);
   if ('coupangCategoryCode' in fields) set.coupangCategoryCode = toIntOrNull(fields.coupangCategoryCode);
   if ('coupangCategoryName' in fields)
     set.coupangCategoryName = fields.coupangCategoryName == null || fields.coupangCategoryName === '' ? null : String(fields.coupangCategoryName);
@@ -163,6 +164,7 @@ export async function getTenantListing(tenantId: string, id: string) {
         listCurrency: channelListings.listCurrency,
         floorPriceJpy: channelListings.floorPriceJpy,
         marginOverride: channelListings.marginOverride,
+        weightGOverride: channelListings.weightGOverride,
         coupangCategoryCode: channelListings.coupangCategoryCode,
         coupangCategoryName: channelListings.coupangCategoryName,
         rejectedReason: channelListings.rejectedReason,

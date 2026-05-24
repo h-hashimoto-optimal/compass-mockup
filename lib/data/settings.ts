@@ -31,7 +31,7 @@ const intOf = (v: unknown): number | undefined => {
 };
 
 type SaveBody = {
-  settings?: { marginRate?: unknown; fxBuffer?: unknown; domesticShippingJpy?: unknown };
+  settings?: { marginRate?: unknown; fxBuffer?: unknown; domesticShippingJpy?: unknown; shippingRates?: unknown };
   coupang?: { sellFeeRate?: unknown; priceRounding?: unknown };
 };
 
@@ -44,6 +44,13 @@ export async function saveTenantSettings(tenantId: string, body: SaveBody) {
   if (fb !== undefined) s.fxBuffer = fb;
   const ds = intOf(body.settings?.domesticShippingJpy);
   if (ds !== undefined) s.domesticShippingJpy = ds;
+  if (Array.isArray(body.settings?.shippingRates)) {
+    const tiers = (body.settings!.shippingRates as Array<{ maxG?: unknown; feeJpy?: unknown }>)
+      .map((t) => ({ maxG: Number(t?.maxG), feeJpy: Number(t?.feeJpy) }))
+      .filter((t) => Number.isFinite(t.maxG) && t.maxG > 0 && Number.isFinite(t.feeJpy) && t.feeJpy >= 0)
+      .sort((a, b) => a.maxG - b.maxG);
+    s.shippingRatesJson = tiers;
+  }
   if (Object.keys(s).length > 1) {
     const upd = await db.update(tenantSettings).set(s).where(eq(tenantSettings.tenantId, tenantId)).returning();
     if (upd.length === 0) await db.insert(tenantSettings).values({ tenantId, ...s });
