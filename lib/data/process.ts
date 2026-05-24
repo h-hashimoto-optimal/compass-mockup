@@ -35,6 +35,7 @@ export async function processListing(tenantId: string, listingId: string) {
       channel: channelListings.channel,
       status: channelListings.status,
       coupangApprovalStatus: channelListings.coupangApprovalStatus,
+      marginOverride: channelListings.marginOverride,
       titleJa: channelListings.titleJa,
       sourceRowId: sourceProducts.id,
       source: sourceProducts.source,
@@ -102,7 +103,8 @@ export async function processListing(tenantId: string, listingId: string) {
 
   // 5. 価格＋赤字下限
   const { listPrice, floorPriceJpy } = computeListingPricing(detail.priceJpy ?? 0, {
-    marginRate: num(ts?.marginRate, DEFAULTS.marginRate),
+    // 商品個別の利益率上書きがあれば優先、無ければテナント既定
+    marginRate: row.marginOverride != null ? num(row.marginOverride, DEFAULTS.marginRate) : num(ts?.marginRate, DEFAULTS.marginRate),
     fxBuffer: num(ts?.fxBuffer, DEFAULTS.fxBuffer),
     domesticShippingJpy: num(ts?.domesticShippingJpy, DEFAULTS.domesticShippingJpy),
     sellFeeRate: num(cs?.sellFeeRate, DEFAULTS.sellFeeRate[row.channel as keyof typeof DEFAULTS.sellFeeRate] ?? 0.11),

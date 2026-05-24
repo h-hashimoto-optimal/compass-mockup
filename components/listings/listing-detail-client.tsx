@@ -21,6 +21,7 @@ type Detail = {
   sourcePriceJpy: number | null; sourceInStock: boolean | null;
   sourceCheckedAt: string | null;
   batchQuery: string | null; batchCapturedAt: string | null;
+  marginOverride: string | null; coupangCategoryCode: number | null; coupangCategoryName: string | null;
 };
 type Preview = {
   preview: { brand: string; ipBrand: { brand: string; level: string } | null; category: string; images: string[] };
@@ -36,6 +37,9 @@ export function ListingDetailClient({ id }: { id: string }) {
   const [titleKo, setTitleKo] = React.useState('');
   const [listPrice, setListPrice] = React.useState('');
   const [floor, setFloor] = React.useState('');
+  const [marginPct, setMarginPct] = React.useState('');
+  const [catCode, setCatCode] = React.useState('');
+  const [catName, setCatName] = React.useState('');
   const [busy, setBusy] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
   const [preview, setPreview] = React.useState<Preview | null>(null);
@@ -50,6 +54,9 @@ export function ListingDetailClient({ id }: { id: string }) {
       setTitleKo(x.titleTranslated ?? '');
       setListPrice(x.listPrice != null ? String(x.listPrice) : '');
       setFloor(x.floorPriceJpy != null ? String(x.floorPriceJpy) : '');
+      setMarginPct(x.marginOverride != null ? String(Math.round(Number(x.marginOverride) * 1000) / 10) : '');
+      setCatCode(x.coupangCategoryCode != null ? String(x.coupangCategoryCode) : '');
+      setCatName(x.coupangCategoryName ?? '');
     });
   }, [id]);
   React.useEffect(load, [load]);
@@ -58,7 +65,12 @@ export function ListingDetailClient({ id }: { id: string }) {
     setBusy('save'); setSaved(false);
     await fetch('/api/listings/' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ titleJa, titleTranslated: titleKo, listPrice, floorPriceJpy: floor }),
+      body: JSON.stringify({
+        titleJa, titleTranslated: titleKo, listPrice, floorPriceJpy: floor,
+        marginOverride: marginPct.trim() === '' ? null : (Number(marginPct) || 0) / 100,
+        coupangCategoryCode: catCode.trim() === '' ? null : catCode,
+        coupangCategoryName: catName.trim() === '' ? null : catName,
+      }),
     });
     setBusy(null); setSaved(true); setTimeout(() => setSaved(false), 2000); load();
   };
@@ -149,6 +161,21 @@ export function ListingDetailClient({ id }: { id: string }) {
                 {saved && <span className="text-sm text-green-600">保存しました</span>}
                 <Button variant="destructive" size="sm" className="ml-auto" onClick={remove} disabled={!!busy}><Trash2 className="h-4 w-4" />削除</Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="text-sm font-medium">出品調整（この商品だけ）</CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">利益率は空欄＝店舗の既定値。カテゴリは空欄＝自動推定。変更後は「出品準備」で売価/カテゴリに反映されます。</p>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="利益率上書き（%）"><Input value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder="既定" disabled={!a.canProcess} /></Field>
+                <Field label="カテゴリコード"><Input value={catCode} onChange={(e) => setCatCode(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
+                <Field label="カテゴリ名"><Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
+              </div>
+              {a.canProcess && (
+                <Button onClick={save} disabled={!!busy} size="sm" variant="outline"><Save className="h-4 w-4" />保存</Button>
+              )}
             </CardContent>
           </Card>
 

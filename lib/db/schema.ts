@@ -146,6 +146,9 @@ export const channelListings = pgTable(
     status: text('status').notNull().default('draft'), // ローカル段階: draft/ready/submitted/error
     coupangApprovalStatus: text('coupang_approval_status'), // 承認: requested/approved/partial_approved/rejected/deleted
     coupangSalesStatus: text('coupang_sales_status'), // 販売: on_sale/suspended/soldout
+    marginOverride: numeric('margin_override', { precision: 6, scale: 4 }), // 商品個別の利益率(rate)。null=テナント既定
+    coupangCategoryCode: integer('coupang_category_code'), // カテゴリ手動上書き（displayCategoryCode）
+    coupangCategoryName: text('coupang_category_name'),
     rejectedReason: text('rejected_reason'),
     channelMeta: jsonb('channel_meta'), // チャネル固有（고시정보/원산지/A/S 等）
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),

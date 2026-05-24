@@ -99,6 +99,16 @@ export async function updateListing(
     set.titleTranslated = fields.titleTranslated == null ? null : String(fields.titleTranslated);
   if ('listPrice' in fields) set.listPrice = toIntOrNull(fields.listPrice);
   if ('floorPriceJpy' in fields) set.floorPriceJpy = toIntOrNull(fields.floorPriceJpy);
+  if ('marginOverride' in fields) {
+    const v = Number(fields.marginOverride);
+    set.marginOverride =
+      fields.marginOverride == null || fields.marginOverride === '' || !Number.isFinite(v)
+        ? null
+        : Math.min(Math.max(v, 0), 0.9).toFixed(4);
+  }
+  if ('coupangCategoryCode' in fields) set.coupangCategoryCode = toIntOrNull(fields.coupangCategoryCode);
+  if ('coupangCategoryName' in fields)
+    set.coupangCategoryName = fields.coupangCategoryName == null || fields.coupangCategoryName === '' ? null : String(fields.coupangCategoryName);
   if (Object.keys(set).length === 0) return null;
 
   return withTenant(tenantId, async (tx) => {
@@ -152,6 +162,9 @@ export async function getTenantListing(tenantId: string, id: string) {
         listPrice: channelListings.listPrice,
         listCurrency: channelListings.listCurrency,
         floorPriceJpy: channelListings.floorPriceJpy,
+        marginOverride: channelListings.marginOverride,
+        coupangCategoryCode: channelListings.coupangCategoryCode,
+        coupangCategoryName: channelListings.coupangCategoryName,
         rejectedReason: channelListings.rejectedReason,
         source: sourceProducts.source,
         sourceProductId: sourceProducts.sourceProductId,

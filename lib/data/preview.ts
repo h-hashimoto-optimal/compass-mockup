@@ -65,6 +65,8 @@ export async function previewListing(tenantId: string, listingId: string) {
       listCurrency: channelListings.listCurrency,
       floorPriceJpy: channelListings.floorPriceJpy,
       sourcePriceJpyAtList: channelListings.sourcePriceJpyAtList,
+      categoryCode: channelListings.coupangCategoryCode,
+      categoryName: channelListings.coupangCategoryName,
       sourceId: sourceProducts.id,
       source: sourceProducts.source,
       sourceProductId: sourceProducts.sourceProductId,
@@ -114,10 +116,15 @@ export async function previewListing(tenantId: string, listingId: string) {
   const ready = !warnings.some((w) => w.level === 'block');
 
   // カテゴリ推定（mock or 実API）
-  const category = await recommendCategory({
-    productName: `${row.titleTranslated ?? ''} ${row.titleJa ?? ''}`.trim(),
-    brand,
-  });
+  // カテゴリ：手動上書きがあれば優先。無ければ推定（テナントのCoupang鍵があれば実API、無ければmock）。
+  let category: { displayCategoryCode: number; displayCategoryName: string };
+  if (row.categoryCode != null) {
+    category = { displayCategoryCode: row.categoryCode, displayCategoryName: row.categoryName ?? `カテゴリ#${row.categoryCode}` };
+  } else {
+    const cc = await getIntegrationSecrets<Record<string, string>>(tenantId, 'coupang');
+    const creds = cc && cc.vendorId && cc.accessKey && cc.secretKey ? { vendorId: cc.vendorId, accessKey: cc.accessKey, secretKey: cc.secretKey } : null;
+    category = await recommendCategory({ productName: `${row.titleTranslated ?? ''} ${row.titleJa ?? ''}`.trim(), brand }, creds);
+  }
 
   // Coupangペイロード（dry-run）
   const payload = buildCoupangPayload(

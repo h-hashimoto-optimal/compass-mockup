@@ -6,12 +6,6 @@
 
 import { signRequest, type CoupangCredentials } from './hmac';
 
-const HAS_REAL_CREDS = Boolean(
-  process.env.COUPANG_VENDOR_ID &&
-    process.env.COUPANG_ACCESS_KEY &&
-    process.env.COUPANG_SECRET_KEY,
-);
-
 export type CategoryRecommendation = {
   displayCategoryCode: number;
   displayCategoryName: string;
@@ -19,27 +13,21 @@ export type CategoryRecommendation = {
   confidence: number; // 0-1
 };
 
-export async function recommendCategory(input: {
-  productName: string;
-  brand?: string;
-  attributes?: Record<string, string>;
-}): Promise<CategoryRecommendation> {
-  if (HAS_REAL_CREDS) {
-    return callCoupangApi(input);
+// テナントのCoupang鍵があれば実APIで推定、無ければキーワード辞書mock。
+export async function recommendCategory(
+  input: { productName: string; brand?: string; attributes?: Record<string, string> },
+  credentials?: CoupangCredentials | null,
+): Promise<CategoryRecommendation> {
+  if (credentials) {
+    return callCoupangApi(input, credentials);
   }
   return mockRecommend(input);
 }
 
-async function callCoupangApi(input: {
-  productName: string;
-  brand?: string;
-  attributes?: Record<string, string>;
-}): Promise<CategoryRecommendation> {
-  const creds: CoupangCredentials = {
-    vendorId: process.env.COUPANG_VENDOR_ID!,
-    accessKey: process.env.COUPANG_ACCESS_KEY!,
-    secretKey: process.env.COUPANG_SECRET_KEY!,
-  };
+async function callCoupangApi(
+  input: { productName: string; brand?: string; attributes?: Record<string, string> },
+  creds: CoupangCredentials,
+): Promise<CategoryRecommendation> {
   const path = '/v2/providers/openapi/apis/api/v1/categorization/predictions';
   const signed = signRequest({
     method: 'POST',
