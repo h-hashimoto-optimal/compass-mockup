@@ -28,6 +28,23 @@ export async function submitListing(tenantId: string, listingId: string) {
   const creds = await getCoupangCreds(tenantId);
   const liveEnabled = process.env.COUPANG_LIVE_SEND === '1';
   if (!creds || !liveEnabled) {
+    // 開発用 擬似送信：実送信せずに「審査中(submitted)」へ進める（COUPANG_MOCK_SEND=1）。本番は使わない。
+    if (process.env.COUPANG_MOCK_SEND === '1') {
+      const fakeSpid = 'MOCK-' + listingId.slice(0, 8);
+      await withTenant(tenantId, (tx) =>
+        tx
+          .update(channelListings)
+          .set({
+            status: 'submitted',
+            coupangApprovalStatus: 'requested',
+            channelProductId: fakeSpid,
+            rejectedReason: null,
+            lastSyncedAt: new Date(),
+          })
+          .where(and(eq(channelListings.id, listingId), eq(channelListings.tenantId, tenantId))),
+      );
+      return { mode: 'mock' as const, reason: '擬似送信（開発用）：審査中にしました', sellerProductId: fakeSpid };
+    }
     // 認証情報なし or 本送信未有効化 → dry-run（実送信しない）。ステータスは変えない。
     return {
       mode: 'dry-run' as const,

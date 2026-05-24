@@ -30,7 +30,7 @@ type Listing = {
 };
 
 type PreviewData = {
-  preview: { images: string[]; titleTranslated: string | null; titleJa: string | null; category: string; listPrice: number | null; listCurrency: string; floorPriceJpy: number | null; sourcePriceJpy: number | null; inStock: boolean | null };
+  preview: { images: string[]; titleTranslated: string | null; titleJa: string | null; brand?: string; ipBrand?: { brand: string; level: string } | null; category: string; listPrice: number | null; listCurrency: string; floorPriceJpy: number | null; sourcePriceJpy: number | null; inStock: boolean | null };
   validation: { ready: boolean; warnings: { level: 'block' | 'info'; msg: string }[] };
 };
 
@@ -88,12 +88,17 @@ export function ListingsClient() {
     load();
   }, [load]);
 
-  const mark = (id: string, on: boolean) =>
+  // busyキーは `${id}:${action}`（アクション別にスピナーを出すため）
+  const setB = (key: string, on: boolean) =>
     setBusy((s) => {
       const n = new Set(s);
-      on ? n.add(id) : n.delete(id);
+      on ? n.add(key) : n.delete(key);
       return n;
     });
+  const rowBusy = (id: string) => {
+    for (const k of busy) if (k.startsWith(id + ':')) return true;
+    return false;
+  };
 
   const counts = React.useMemo(() => {
     const c: Record<string, number> = { all: items.length, draft: 0, ready: 0, review: 0, selling: 0, attention: 0, other: 0 };
@@ -119,27 +124,30 @@ export function ListingsClient() {
     load();
   };
 
-  const act = async (id: string, path: string) => {
-    mark(id, true);
+  const PATHS = { process: '/process', preview: '/dry-run', submit: '/submit', reconcile: '/reconcile' } as const;
+  const act = async (id: string, action: keyof typeof PATHS) => {
+    const key = `${id}:${action}`;
+    setB(key, true);
     try {
-      const r = await fetch(`/api/listings/${id}${path}`, { method: 'POST' });
+      const r = await fetch(`/api/listings/${id}${PATHS[action]}`, { method: 'POST' });
       return { ok: r.ok, json: await r.json().catch(() => ({})) };
     } finally {
-      mark(id, false);
+      setB(key, false);
     }
   };
-  const doProcess = async (id: string) => { const r = await act(id, '/process'); setMsg(r.ok ? '処理しました（取得・翻訳・価格）' : '処理に失敗'); load(); };
-  const doPreview = async (id: string) => { const r = await act(id, '/dry-run'); if (r.ok) setPreview({ id, data: r.json as PreviewData }); else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗'); };
+  const doProcess = async (id: string) => { const r = await act(id, 'process'); setMsg(r.ok ? '出品準備しました（取得・翻訳・価格）' : '処理に失敗'); load(); };
+  const doPreview = async (id: string) => { const r = await act(id, 'preview'); if (r.ok) setPreview({ id, data: r.json as PreviewData }); else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗'); };
   const doSubmit = async (id: string) => {
-    const r = await act(id, '/submit');
+    const r = await act(id, 'submit');
     const j = r.json as { mode?: string; warnings?: string[]; reason?: string };
     if (j.mode === 'blocked') setMsg('送信不可：' + (j.warnings ?? []).join(' / '));
+    else if (j.mode === 'mock') setMsg('擬似送信しました（審査中）');
     else if (j.mode === 'dry-run') setMsg('dry-run（' + (j.reason ?? '認証情報未設定') + '）');
     else setMsg('Coupangへ送信しました');
     load();
   };
-  const doSync = async (id: string) => { const r = await act(id, '/reconcile'); setMsg(r.ok ? '状態同期しました' : 'r' in r ? '同期：対象外（送信済みのみ）' : '同期に失敗'); load(); };
-  const doDelete = async (id: string) => { if (!confirm('この出品を削除しますか？')) return; mark(id, true); await fetch(`/api/listings/${id}`, { method: 'DELETE' }); mark(id, false); load(); };
+  const doSync = async (id: string) => { const r = await act(id, 'reconcile'); setMsg(r.ok ? '状態同期しました' : '同期：対象外（送信済みのみ）'); load(); };
+  const doDelete = async (id: string) => { if (!confirm('この出品を削除しますか？')) return; setB(`${id}:delete`, true); await fetch(`/api/listings/${id}`, { method: 'DELETE' }); setB(`${id}:delete`, false); load(); };
 
   const saveField = async (id: string, field: 'titleTranslated' | 'listPrice', value: string) => {
     await fetch(`/api/listings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: value }) });
@@ -219,7 +227,7 @@ export function ListingsClient() {
         {selected.size > 0 && (
           <>
             <span className="text-sm text-muted-foreground">{selected.size}件</span>
-            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('process')}><Cog className="h-3.5 w-3.5" />処理</Button>
+            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('process')} title="Amazon取得→翻訳→価格計算"><Cog className="h-3.5 w-3.5" />出品準備</Button>
             <Button size="sm" disabled={bulkBusy} onClick={() => bulk('submit')}><Send className="h-3.5 w-3.5" />送信</Button>
             <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulk('reconcile')}><RotateCw className="h-3.5 w-3.5" />同期</Button>
             <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => bulk('delete')}><Trash2 className="h-3.5 w-3.5" />削除</Button>
@@ -260,11 +268,11 @@ export function ListingsClient() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
-                    <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doProcess(l.id)}>{busy.has(l.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}処理</Button>
-                    <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doPreview(l.id)}><Eye className="h-3.5 w-3.5" />プレビュー</Button>
-                    <Button size="sm" disabled={busy.has(l.id)} onClick={() => doSubmit(l.id)}><Send className="h-3.5 w-3.5" />送信</Button>
-                    {l.status === 'submitted' && <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doSync(l.id)}><RotateCw className="h-3.5 w-3.5" />同期</Button>}
-                    <Button size="sm" variant="ghost" onClick={() => doDelete(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doProcess(l.id)} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算（送信待ちにする）">{busy.has(`${l.id}:process`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}出品準備</Button>
+                    <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doPreview(l.id)}>{busy.has(`${l.id}:preview`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}プレビュー</Button>
+                    <Button size="sm" disabled={rowBusy(l.id)} onClick={() => doSubmit(l.id)}>{busy.has(`${l.id}:submit`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}送信</Button>
+                    {l.status === 'submitted' && <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doSync(l.id)}>{busy.has(`${l.id}:reconcile`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}同期</Button>}
+                    <Button size="sm" variant="ghost" disabled={rowBusy(l.id)} onClick={() => doDelete(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </CardContent>
               </Card>
@@ -289,11 +297,16 @@ export function ListingsClient() {
               </div>
               <div className="text-sm font-medium">{preview.data.preview.titleTranslated || '(未翻訳)'}</div>
               <div className="text-xs text-muted-foreground">{preview.data.preview.titleJa}</div>
+              {preview.data.preview.ipBrand && (
+                <div className="text-xs text-destructive">⚠️ 知財監視ブランド該当：{preview.data.preview.ipBrand.brand}</div>
+              )}
               <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>ブランド：{preview.data.preview.brand ?? '—'}</div>
                 <div>カテゴリ：{preview.data.preview.category}</div>
                 <div>仕入：{yen(preview.data.preview.sourcePriceJpy)}</div>
                 <div>売価：{krw(preview.data.preview.listPrice, preview.data.preview.listCurrency)}</div>
                 <div>赤字下限：{yen(preview.data.preview.floorPriceJpy)}</div>
+                <div>在庫：{preview.data.preview.inStock === false ? '欠品' : 'あり'}</div>
               </div>
               <div className="space-y-1">
                 <div className={`text-xs font-bold ${preview.data.validation.ready ? 'text-green-600' : 'text-red-600'}`}>{preview.data.validation.ready ? '✓ 送信可能' : '✕ 必須項目に不足あり'}</div>
@@ -301,7 +314,8 @@ export function ListingsClient() {
                   <div key={i} className={`text-xs ${w.level === 'block' ? 'text-red-600' : 'text-amber-600'}`}>{w.level === 'block' ? '⛔' : '⚠️'} {w.msg}</div>
                 ))}
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Link href={`/listings/${preview.id}`} className="mr-auto text-xs text-primary hover:underline">詳細を開く →</Link>
                 <Button variant="outline" size="sm" onClick={() => setPreview(null)}>閉じる</Button>
                 <Button size="sm" disabled={!preview.data.validation.ready} onClick={() => { const id = preview.id; setPreview(null); doSubmit(id); }}><Send className="h-3.5 w-3.5" />この内容で送信</Button>
               </div>
