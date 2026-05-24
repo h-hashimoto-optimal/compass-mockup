@@ -15,6 +15,7 @@ export type IngestInput = {
   priceJpy?: number | null;
   brand?: string | null; // 拡張がスクレイプした実ブランド
   imageUrl?: string | null; // 拡張がスクレイプした実メイン画像
+  ingestBatchId?: string | null; // 取得グループ
 };
 
 // 仕入元商品を upsert（全社共通・重複排除）し、テナントの出品(draft)を作る/既存を返す。
@@ -72,6 +73,7 @@ export async function ingestListing(tenantId: string, input: IngestInput) {
         channel: input.channel,
         titleJa: input.titleJa ?? null,
         sourcePriceJpyAtList: input.priceJpy ?? null,
+        ingestBatchId: input.ingestBatchId ?? null,
       })
       .returning();
     return { blocked: false as const, listing, created: true };

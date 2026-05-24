@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveTenantByToken } from '@/lib/tenant-token';
 import { ingestListing } from '@/lib/data/listings';
+import { createBatch } from '@/lib/data/batches';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'asin または items[] が必要です' }, { status: 400, headers: CORS });
   }
 
+  // 取得グループ（拡張1回分）を作成。検索語/取得日時/取得元URLで束ねる。
+  const validCount = items.filter((it) => String(it.asin ?? it.sourceProductId ?? '').trim().length === 10).length;
+  const batch = await createBatch(tenantId, {
+    source: 'amazon',
+    query: body.query ? String(body.query) : null,
+    url: body.url ? String(body.url) : null,
+    capturedAt: body.capturedAt ? String(body.capturedAt) : null,
+    itemCount: validCount,
+  });
+
   let created = 0;
   let blocked = 0;
   const results: Array<{ asin: string; status: 'created' | 'exists' | 'blocked' }> = [];
@@ -53,6 +64,7 @@ export async function POST(req: Request) {
       priceJpy: toInt(it.priceJpy ?? it.price),
       brand: it.brand ? String(it.brand) : null,
       imageUrl: it.imageUrl ? String(it.imageUrl) : it.image ? String(it.image) : null,
+      ingestBatchId: batch.id,
     });
     if (r.blocked) {
       blocked++;
@@ -63,5 +75,5 @@ export async function POST(req: Request) {
     results.push({ asin: sourceProductId, status: r.created ? 'created' : 'exists' });
   }
 
-  return NextResponse.json({ received: items.length, created, blocked, results }, { status: 201, headers: CORS });
+  return NextResponse.json({ received: items.length, created, blocked, batchId: batch.id, results }, { status: 201, headers: CORS });
 }

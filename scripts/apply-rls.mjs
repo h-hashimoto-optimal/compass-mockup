@@ -8,10 +8,13 @@ import { Pool } from 'pg';
 function loadEnv() { for (const l of fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf8').split(/\r?\n/)) { const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/); if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2]; } }
 loadEnv();
 
-const TABLES = ['tenant_integrations', 'channel_listings', 'orders'];
+const TABLES = ['tenant_integrations', 'channel_listings', 'orders', 'ingest_batches'];
+const APP_ROLE = 'compass_app';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 for (const t of TABLES) {
+  // 新規テーブルでも app ロールがアクセスできるよう保険でGRANT（冪等）
+  try { await pool.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${t} TO ${APP_ROLE}`); } catch (e) { console.log('grant skip:', e.message.slice(0, 50)); }
   await pool.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   await pool.query(`DROP POLICY IF EXISTS tenant_isolation ON ${t}`);
   // NULLIF で空文字('')→NULL に正規化（GUC未設定時のキャストエラーを防ぐ＝未設定は0件で安全に遮断）

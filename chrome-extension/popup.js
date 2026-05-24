@@ -94,7 +94,13 @@ async function send() {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Compass-Token': token },
-      body: JSON.stringify({ source: 'amazon-jp', items: payload.items }),
+      body: JSON.stringify({
+        source: 'amazon-jp',
+        query: payload.query || '',
+        url: payload.url || '',
+        capturedAt: payload.capturedAt || null,
+        items: payload.items,
+      }),
     });
     if (!res.ok) {
       const text = await res.text();

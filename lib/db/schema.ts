@@ -131,6 +131,9 @@ export const channelListings = pgTable(
     sourceProductId: uuid('source_product_id')
       .notNull()
       .references(() => sourceProducts.id, { onDelete: 'cascade' }),
+    ingestBatchId: uuid('ingest_batch_id').references(() => ingestBatches.id, {
+      onDelete: 'set null',
+    }), // 取得グループ（拡張1回分）。手動追加はnull
     channel: text('channel').notNull(), // coupang / naver / 11st
     channelProductId: text('channel_product_id'),
     channelItemId: text('channel_item_id'), // coupang vendorItemId 等（停止/再開に使用）
@@ -336,6 +339,24 @@ export const tenantTokens = pgTable(
   }),
 );
 
+// ASIN取得グループ（拡張の1回分の収集＝検索語＋取得日時で束ねる）。受信トレイの管理単位。
+export const ingestBatches = pgTable(
+  'ingest_batches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    source: text('source').notNull().default('amazon'),
+    query: text('query'), // 検索キーワード（商品ページ取得なら空）
+    url: text('url'), // 取得元URL
+    capturedAt: timestamp('captured_at', { withTimezone: true }),
+    itemCount: integer('item_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ tenantIdx: index('ingest_batches_tenant_idx').on(t.tenantId, t.createdAt) }),
+);
+
 // 受注（販売チャネルからの注文。Coupang注文API連携後に同期）
 export const orders = pgTable(
   'orders',
@@ -376,6 +397,7 @@ export const tenantMonitoringSettings = pgTable('tenant_monitoring_settings', {
 });
 
 export type Order = typeof orders.$inferSelect;
+export type IngestBatch = typeof ingestBatches.$inferSelect;
 export type TenantMonitoringSettings = typeof tenantMonitoringSettings.$inferSelect;
 export type TenantToken = typeof tenantTokens.$inferSelect;
 export type SourceProduct = typeof sourceProducts.$inferSelect;
