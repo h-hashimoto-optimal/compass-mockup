@@ -7,10 +7,11 @@ import { recommendCategory } from '@/lib/channels/coupang/category-mapper';
 import { buildCoupangPayload } from '@/lib/channels/coupang/schema';
 import { signRequest, toCurl } from '@/lib/channels/coupang/hmac';
 import { matchIpBrand } from '@/lib/data/lists';
+import { getIntegrationSecrets } from '@/lib/data/integrations';
 
 type SourceRaw = { imageUrls?: string[]; brand?: string; description?: string } | null;
 
-// dry-run用のデモ加盟店情報（実運用は tenant_integrations から復号して使う）
+// dry-run用のデモ加盟店情報（連携未設定時のフォールバック）
 const DEMO_CTX = {
   vendorId: 'A012345',
   vendorUserId: 'demo_shop',
@@ -24,11 +25,32 @@ const DEMO_CTX = {
     contactName: 'Demo',
   },
 };
+// 署名/curl表示は常にデモ鍵で行う（実 accessKey/secretKey をレスポンスへ漏らさないため）。
 const DEMO_CREDS = {
   vendorId: 'A012345',
   accessKey: 'DEMO_ACCESS_KEY_NOT_REAL',
   secretKey: 'DEMO_SECRET_KEY_NOT_REAL',
 };
+
+// 連携(coupang)から出荷/返品コンテキストを解決（vendorId等＝非秘密）。未設定はデモ値。
+async function resolveCoupangCtx(tenantId: string) {
+  const s = await getIntegrationSecrets<Record<string, string>>(tenantId, 'coupang');
+  if (!s || !s.vendorId) return { ...DEMO_CTX, configured: false };
+  return {
+    vendorId: s.vendorId,
+    vendorUserId: s.vendorUserId || DEMO_CTX.vendorUserId,
+    returnCenterCode: s.returnCenterCode || DEMO_CTX.returnCenterCode,
+    outboundShippingPlaceCode: s.outboundShippingPlaceCode || DEMO_CTX.outboundShippingPlaceCode,
+    returnAddress: {
+      zip: s.returnZip || DEMO_CTX.returnAddress.zip,
+      address: s.returnAddress || DEMO_CTX.returnAddress.address,
+      detail: DEMO_CTX.returnAddress.detail,
+      contactNumber: s.returnContactNumber || DEMO_CTX.returnAddress.contactNumber,
+      contactName: s.returnContactName || DEMO_CTX.returnAddress.contactName,
+    },
+    configured: true,
+  };
+}
 
 export async function previewListing(tenantId: string, listingId: string) {
   const [row] = await db
@@ -65,6 +87,7 @@ export async function previewListing(tenantId: string, listingId: string) {
   const raw = row.raw as SourceRaw;
   const images = raw?.imageUrls ?? [];
   const brand = raw?.brand ?? 'NoBrand';
+  const ctx = await resolveCoupangCtx(tenantId);
 
   // 必須項目チェック（blocking=送信不可 / info=注意）
   const warnings: { level: 'block' | 'info'; msg: string }[] = [];
@@ -75,6 +98,8 @@ export async function previewListing(tenantId: string, listingId: string) {
     warnings.push({ level: 'block', msg: `現在の仕入値(${row.lastPriceJpy}円)が赤字下限(${row.floorPriceJpy}円)を超過＝このままだと赤字` });
   warnings.push({ level: 'info', msg: '商品コード(ASIN/JAN)はCoupang相乗りのマッチング要確認（product-idは空欄出力）' });
   warnings.push({ level: 'info', msg: '상품정보제공고시/カテゴリ別必須属性は現状プレースホルダ（★Coupang必須項目フル対応で実装予定）' });
+  if (!ctx.configured)
+    warnings.push({ level: 'info', msg: 'Coupang連携が未設定です（「販売先（Coupang）」でAPI鍵・出荷/返品情報を登録）。送信はデモ扱いになります' });
 
   // 知財ブランド（本部共有＋自社）に該当するか
   const ipBrand = await matchIpBrand(tenantId, brand);
@@ -106,12 +131,12 @@ export async function previewListing(tenantId: string, listingId: string) {
       marginRate: 0,
     },
     {
-      vendorId: DEMO_CTX.vendorId,
-      vendorUserId: DEMO_CTX.vendorUserId,
+      vendorId: ctx.vendorId,
+      vendorUserId: ctx.vendorUserId,
       displayCategoryCode: category.displayCategoryCode,
-      returnCenterCode: DEMO_CTX.returnCenterCode,
-      outboundShippingPlaceCode: DEMO_CTX.outboundShippingPlaceCode,
-      returnAddress: DEMO_CTX.returnAddress,
+      returnCenterCode: ctx.returnCenterCode,
+      outboundShippingPlaceCode: ctx.outboundShippingPlaceCode,
+      returnAddress: ctx.returnAddress,
     },
   );
 

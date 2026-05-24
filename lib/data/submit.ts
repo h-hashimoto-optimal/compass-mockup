@@ -1,21 +1,17 @@
 // 単一商品をCoupangへ送る（送信アクション）。
-// 認証情報が無ければ dry-run（実送信せず）、有れば本送信（将来：キー＋固定IP投入後に有効）。
+// 認証情報が無い／本送信未有効化なら dry-run（実送信せず）。鍵が揃い COUPANG_LIVE_SEND=1 のときだけ本送信。
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { tenantIntegrations, channelListings } from '@/lib/db/schema';
+import { channelListings } from '@/lib/db/schema';
 import { signRequest } from '@/lib/channels/coupang/hmac';
+import { getIntegrationSecrets } from '@/lib/data/integrations';
 import { previewListing } from './preview';
 
-// tenant_integrations から Coupang 認証情報を取得（復号）。現状は暗号化/復号未実装＝null。
+// tenant_integrations(coupang) を復号して認証情報を取得。鍵が揃っていなければ null。
 async function getCoupangCreds(tenantId: string): Promise<{ vendorId: string; accessKey: string; secretKey: string } | null> {
-  const [row] = await db
-    .select()
-    .from(tenantIntegrations)
-    .where(and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.kind, 'coupang')))
-    .limit(1);
-  if (!row?.secretsEnc) return null; // 鍵未設定
-  // TODO: secrets_enc を復号して {vendorId, accessKey, secretKey} を返す（暗号化実装後）
-  return null;
+  const s = await getIntegrationSecrets<Record<string, string>>(tenantId, 'coupang');
+  if (!s || !s.vendorId || !s.accessKey || !s.secretKey) return null;
+  return { vendorId: s.vendorId, accessKey: s.accessKey, secretKey: s.secretKey };
 }
 
 export async function submitListing(tenantId: string, listingId: string) {
@@ -30,16 +26,19 @@ export async function submitListing(tenantId: string, listingId: string) {
   }
 
   const creds = await getCoupangCreds(tenantId);
-  if (!creds) {
-    // 認証情報なし → dry-run（実送信しない）。ステータスは変えない。
+  const liveEnabled = process.env.COUPANG_LIVE_SEND === '1';
+  if (!creds || !liveEnabled) {
+    // 認証情報なし or 本送信未有効化 → dry-run（実送信しない）。ステータスは変えない。
     return {
       mode: 'dry-run' as const,
-      reason: 'Coupang認証情報が未設定（キー＋固定IP投入で本送信に切替）',
+      reason: !creds
+        ? 'Coupang認証情報が未設定（「販売先（Coupang）」で登録）'
+        : '本送信は未有効化（固定IP確保後、サーバに COUPANG_LIVE_SEND=1 を設定で有効化）',
       payload: pv.payload,
     };
   }
 
-  // ── 本送信（creds が揃った将来に有効） ──
+  // ── 本送信（creds が揃い、COUPANG_LIVE_SEND=1 のときのみ） ──
   const signed = signRequest({
     method: 'POST',
     pathWithQuery: '/v2/providers/seller_api/apis/api/v1/marketplace/seller-products',
