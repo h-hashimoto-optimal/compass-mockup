@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Inbox, ListChecks, Send, Siren, Plug, Building2, ArrowRight } from 'lucide-react';
+import { Inbox, ListChecks, Siren, Plug, Building2, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertSummary } from '@/components/features/alert-summary';
 import { getSession } from '@/lib/auth';
@@ -9,8 +9,7 @@ export const dynamic = 'force-dynamic';
 
 const tenantLinks = [
   { href: '/products', label: 'ASIN受信トレイ', desc: 'Chrome拡張で集めたASINを取り込む', icon: Inbox },
-  { href: '/listings', label: '出品管理', desc: '翻訳・価格・赤字下限を整えて出品', icon: ListChecks },
-  { href: '/publish', label: 'Coupang一括出品', desc: '送信待ちをまとめて処理・送信', icon: Send },
+  { href: '/listings', label: '商品管理', desc: 'ステータス別に処理・送信・状態同期', icon: ListChecks },
   { href: '/alerts', label: '在庫・損益アラート', desc: '赤字・欠品を検知して対処', icon: Siren },
   { href: '/settings/channels', label: '連携設定', desc: 'Amazon / Coupang のAPI鍵', icon: Plug },
 ];

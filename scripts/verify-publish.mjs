@@ -52,10 +52,10 @@ console.log(`4) BはAのidを一括処理不可: ok=${crossOk}/2 => ${P(crossOk 
 const ow = (await post(owner, '/api/listings/bulk', { ids: [id1], action: 'process' })).status;
 console.log(`5) owner一括403: ${ow} => ${P(ow === 403)}`);
 
-// 6) /publish ページ描画（テナント200/文言・owner本部メッセージ）
-const pg = await get(A, '/publish'); const html = await pg.text();
-const pgo = await get(owner, '/publish'); const ho = await pgo.text();
-console.log(`6) /publish描画: テナント=${pg.status}/${html.includes('一括出品')} owner本部=${pgo.status}/${ho.includes('本部アカウント')} => ${P(pg.status === 200 && html.includes('一括出品') && pgo.status === 200 && ho.includes('本部アカウント'))}`);
+// 6) 商品管理(/listings)描画（テナント200/文言・owner本部メッセージ）※一括は商品管理に統合
+const pg = await get(A, '/listings'); const html = await pg.text();
+const pgo = await get(owner, '/listings'); const ho = await pgo.text();
+console.log(`6) 商品管理描画: テナント=${pg.status}/${html.includes('商品管理')} owner本部=${pgo.status}/${ho.includes('本部アカウント')} => ${P(pg.status === 200 && html.includes('商品管理') && pgo.status === 200 && ho.includes('本部アカウント'))}`);
 
 // cleanup
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });

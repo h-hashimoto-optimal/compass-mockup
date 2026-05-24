@@ -23,7 +23,7 @@ console.log(`1) 未ログイン/listings→login: ${noAuth.status} ${P(noAuth.st
 // テナントで /listings → 200 + 画面文言
 const r = await fetch(BASE + '/listings', { headers: { cookie: T } });
 const html = await r.text();
-console.log(`2) テナントで/listings描画: ${r.status} 文言=${html.includes('出品管理')} ${P(r.status === 200 && html.includes('出品管理'))}`);
+console.log(`2) テナントで/listings描画: ${r.status} 文言=${html.includes('商品管理')} ${P(r.status === 200 && html.includes('商品管理'))}`);
 
 // owner で /listings → 本部メッセージ
 const ro = await fetch(BASE + '/listings', { headers: { cookie: owner } });

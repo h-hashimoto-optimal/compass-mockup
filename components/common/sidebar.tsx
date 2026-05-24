@@ -38,8 +38,7 @@ const items: NavItem[] = [
     label: '管理',
     icon: ListChecks,
     children: [
-      { href: '/listings', label: '出品商品管理', icon: ListChecks },
-      { href: '/publish', label: 'Coupang一括出品', icon: Send },
+      { href: '/listings', label: '商品管理', icon: ListChecks },
       { href: '/alerts', label: '在庫・損益監視', icon: Siren },
     ],
   },

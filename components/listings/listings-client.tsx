@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, RefreshCw, Eye, Send, Trash2, Loader2, X } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, RefreshCw, Eye, Send, Trash2, Loader2, X, Cog, RotateCw } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { listingStatusView } from '@/lib/listing-status';
 
 type Listing = {
@@ -35,16 +37,41 @@ type PreviewData = {
 const yen = (n: number | null) => (n == null ? '—' : `¥${n.toLocaleString('ja-JP')}`);
 const krw = (n: number | null, c = 'KRW') => (n == null ? '—' : `${n.toLocaleString('ja-JP')} ${c}`);
 
+// ステータス→フィルタ群
+type Group = 'draft' | 'ready' | 'review' | 'selling' | 'attention' | 'other';
+function groupOf(l: Listing): Group {
+  if (l.status === 'draft') return 'draft';
+  if (l.status === 'ready') return 'ready';
+  if (l.status === 'error') return 'attention';
+  if (l.status === 'submitted') {
+    const ap = l.coupangApprovalStatus;
+    if (ap === 'rejected' || ap === 'deleted') return 'attention';
+    if (ap === 'requested' || ap == null) return 'review';
+    // approved / partial_approved
+    if (l.coupangSalesStatus === 'suspended' || l.coupangSalesStatus === 'soldout') return 'attention';
+    return 'selling';
+  }
+  return 'other';
+}
+const FILTERS: { key: 'all' | Group; label: string }[] = [
+  { key: 'all', label: 'すべて' },
+  { key: 'draft', label: '未処理' },
+  { key: 'ready', label: '送信待ち' },
+  { key: 'review', label: '審査中' },
+  { key: 'selling', label: '販売中' },
+  { key: 'attention', label: '要対応' },
+];
 
 export function ListingsClient() {
   const [items, setItems] = React.useState<Listing[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [filter, setFilter] = React.useState<'all' | Group>('all');
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [busy, setBusy] = React.useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = React.useState(false);
   const [preview, setPreview] = React.useState<{ id: string; data: PreviewData } | null>(null);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  // ASIN追加フォーム
   const [asin, setAsin] = React.useState('');
   const [titleJa, setTitleJa] = React.useState('');
   const [priceJpy, setPriceJpy] = React.useState('');
@@ -54,6 +81,7 @@ export function ListingsClient() {
     const r = await fetch('/api/listings', { cache: 'no-store' });
     const j = await r.json();
     setItems(j.listings ?? []);
+    setSelected(new Set());
     setLoading(false);
   }, []);
   React.useEffect(() => {
@@ -67,6 +95,14 @@ export function ListingsClient() {
       return n;
     });
 
+  const counts = React.useMemo(() => {
+    const c: Record<string, number> = { all: items.length, draft: 0, ready: 0, review: 0, selling: 0, attention: 0, other: 0 };
+    for (const l of items) c[groupOf(l)]++;
+    return c;
+  }, [items]);
+
+  const filtered = filter === 'all' ? items : items.filter((l) => groupOf(l) === filter);
+
   const addAsin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!asin.trim()) return;
@@ -78,9 +114,7 @@ export function ListingsClient() {
     });
     const j = await r.json();
     if (!r.ok) return setMsg(j.error ?? '追加に失敗');
-    setAsin('');
-    setTitleJa('');
-    setPriceJpy('');
+    setAsin(''); setTitleJa(''); setPriceJpy('');
     setMsg(j.status === 'exists' ? '既に登録済みのASINです' : 'ASINを追加しました');
     load();
   };
@@ -94,19 +128,8 @@ export function ListingsClient() {
       mark(id, false);
     }
   };
-
-  const doProcess = async (id: string) => {
-    const r = await act(id, '/process');
-    setMsg(r.ok ? '処理しました（翻訳・価格・赤字下限を更新）' : 'r' in r ? '処理に失敗' : '処理に失敗');
-    load();
-  };
-
-  const doPreview = async (id: string) => {
-    const r = await act(id, '/dry-run');
-    if (r.ok) setPreview({ id, data: r.json as PreviewData });
-    else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗');
-  };
-
+  const doProcess = async (id: string) => { const r = await act(id, '/process'); setMsg(r.ok ? '処理しました（取得・翻訳・価格）' : '処理に失敗'); load(); };
+  const doPreview = async (id: string) => { const r = await act(id, '/dry-run'); if (r.ok) setPreview({ id, data: r.json as PreviewData }); else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗'); };
   const doSubmit = async (id: string) => {
     const r = await act(id, '/submit');
     const j = r.json as { mode?: string; warnings?: string[]; reason?: string };
@@ -115,102 +138,91 @@ export function ListingsClient() {
     else setMsg('Coupangへ送信しました');
     load();
   };
-
-  const doDelete = async (id: string) => {
-    if (!confirm('この出品を削除しますか？')) return;
-    mark(id, true);
-    await fetch(`/api/listings/${id}`, { method: 'DELETE' });
-    mark(id, false);
-    load();
-  };
+  const doSync = async (id: string) => { const r = await act(id, '/reconcile'); setMsg(r.ok ? '状態同期しました' : 'r' in r ? '同期：対象外（送信済みのみ）' : '同期に失敗'); load(); };
+  const doDelete = async (id: string) => { if (!confirm('この出品を削除しますか？')) return; mark(id, true); await fetch(`/api/listings/${id}`, { method: 'DELETE' }); mark(id, false); load(); };
 
   const saveField = async (id: string, field: 'titleTranslated' | 'listPrice', value: string) => {
-    await fetch(`/api/listings/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value }),
-    });
+    await fetch(`/api/listings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: value }) });
   };
 
-  const toggle = (id: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allSel = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
+  const toggleAll = () => setSelected(allSel ? new Set() : new Set(filtered.map((l) => l.id)));
 
-  const doReconcile = async () => {
-    setMsg('Coupangと状態同期中…');
-    const r = await fetch('/api/tenant/reconcile', { method: 'POST' });
-    const j = await r.json();
-    setMsg(r.ok ? `状態同期：${j.updated ?? 0}/${j.scanned ?? 0}件を更新` : '状態同期に失敗');
-    load();
-  };
-
-  const bulk = async (action: 'process' | 'submit') => {
+  const bulk = async (action: 'process' | 'submit' | 'reconcile' | 'delete') => {
     const ids = [...selected];
     if (!ids.length) return;
-    setMsg(`一括${action === 'process' ? '処理' : '送信'}中…（${ids.length}件）`);
-    const r = await fetch('/api/listings/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, action }),
-    });
-    const j = await r.json();
-    const ok = (j.results ?? []).filter((x: { ok: boolean }) => x.ok).length;
-    setMsg(`一括${action === 'process' ? '処理' : '送信'}完了：${ok}/${ids.length} 成功`);
-    setSelected(new Set());
+    if (action === 'delete' && !confirm(`${ids.length}件を削除しますか？`)) return;
+    setBulkBusy(true);
+    const label = { process: '処理', submit: '送信', reconcile: '状態同期', delete: '削除' }[action];
+    setMsg(`一括${label}中…（${ids.length}件）`);
+    if (action === 'delete') {
+      await Promise.all(ids.map((id) => fetch(`/api/listings/${id}`, { method: 'DELETE' })));
+      setMsg(`一括削除：${ids.length}件`);
+    } else if (action === 'reconcile') {
+      const r = await fetch('/api/tenant/reconcile', { method: 'POST' });
+      const j = await r.json();
+      setMsg(`状態同期：${j.updated ?? 0}/${j.scanned ?? 0}件を更新`);
+    } else {
+      const r = await fetch('/api/listings/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, action }) });
+      const j = await r.json();
+      const ok = (j.results ?? []).filter((x: { ok: boolean }) => x.ok).length;
+      setMsg(`一括${label}：${ok}/${ids.length} 成功`);
+    }
+    setBulkBusy(false);
     load();
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">出品管理（Amazon → Coupang）</h1>
-        <p className="text-sm text-muted-foreground mt-1">ASINを追加 → 処理（詳細取得・翻訳・価格）→ プレビュー → Coupang送信。単一・一括どちらも可。</p>
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">商品管理（Amazon → Coupang）</h1>
+          <p className="text-sm text-muted-foreground mt-1">ステータスで絞り込んで、まとめて処理・送信・状態同期できます。</p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="h-3.5 w-3.5" />更新</Button>
+          <Button variant="outline" size="sm" onClick={() => bulk('reconcile')} title="送信済みのCoupang承認/販売を取り込む"><RotateCw className="h-3.5 w-3.5" />状態同期</Button>
+        </div>
       </div>
 
       <Card>
-        <CardHeader className="text-sm font-medium">＋ ASINを追加</CardHeader>
+        <CardHeader className="text-sm font-medium">＋ ASINを手動追加（通常はChrome拡張→受信トレイ）</CardHeader>
         <CardContent>
           <form onSubmit={addAsin} className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-xs text-muted-foreground">ASIN</label>
-              <Input className="mt-1" value={asin} onChange={(e) => setAsin(e.target.value)} placeholder="B0XXXXXXXX" required />
-            </div>
-            <div className="flex-1 min-w-[160px]">
-              <label className="text-xs text-muted-foreground">タイトル（任意）</label>
-              <Input className="mt-1" value={titleJa} onChange={(e) => setTitleJa(e.target.value)} placeholder="（拡張取込時は自動）" />
-            </div>
-            <div className="w-28">
-              <label className="text-xs text-muted-foreground">仕入(円・任意)</label>
-              <Input className="mt-1" value={priceJpy} onChange={(e) => setPriceJpy(e.target.value)} placeholder="例 1980" />
-            </div>
-            <Button type="submit">
-              <Plus className="h-4 w-4" />
-              追加
-            </Button>
+            <div className="flex-1 min-w-[180px]"><label className="text-xs text-muted-foreground">ASIN</label><Input className="mt-1" value={asin} onChange={(e) => setAsin(e.target.value)} placeholder="B0XXXXXXXX" required /></div>
+            <div className="flex-1 min-w-[160px]"><label className="text-xs text-muted-foreground">タイトル（任意）</label><Input className="mt-1" value={titleJa} onChange={(e) => setTitleJa(e.target.value)} /></div>
+            <div className="w-28"><label className="text-xs text-muted-foreground">仕入(円・任意)</label><Input className="mt-1" value={priceJpy} onChange={(e) => setPriceJpy(e.target.value)} placeholder="例 1980" /></div>
+            <Button type="submit"><Plus className="h-4 w-4" />追加</Button>
           </form>
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={load}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          更新
-        </Button>
-        <Button variant="outline" size="sm" onClick={doReconcile} title="送信済みの出品のCoupang承認/販売ステータスを取り込む">
-          <RefreshCw className="h-3.5 w-3.5" />
-          状態同期
-        </Button>
+      {/* ステータスフィルタ */}
+      <div className="flex flex-wrap gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => { setFilter(f.key); setSelected(new Set()); }}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${filter === f.key ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'}`}
+          >
+            {f.label} {counts[f.key] ?? 0}
+          </button>
+        ))}
+      </div>
+
+      {/* 一括バー */}
+      <div className="flex items-center gap-2 flex-wrap min-h-8">
+        {filtered.length > 0 && (
+          <label className="flex items-center gap-1.5 text-sm"><Checkbox checked={allSel} onChange={toggleAll} />全選択</label>
+        )}
         {selected.size > 0 && (
           <>
-            <span className="text-sm text-muted-foreground">{selected.size}件選択</span>
-            <Button size="sm" onClick={() => bulk('process')}>一括処理</Button>
-            <Button size="sm" variant="outline" onClick={() => bulk('submit')}>
-              <Send className="h-3.5 w-3.5" />
-              一括送信
-            </Button>
+            <span className="text-sm text-muted-foreground">{selected.size}件</span>
+            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('process')}><Cog className="h-3.5 w-3.5" />処理</Button>
+            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('submit')}><Send className="h-3.5 w-3.5" />送信</Button>
+            <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulk('reconcile')}><RotateCw className="h-3.5 w-3.5" />同期</Button>
+            <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => bulk('delete')}><Trash2 className="h-3.5 w-3.5" />削除</Button>
           </>
         )}
         {msg && <span className="ml-auto text-xs text-primary">{msg}</span>}
@@ -218,62 +230,46 @@ export function ListingsClient() {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">読み込み中…</p>
-      ) : items.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">出品がありません。上のフォームでASINを追加してください。</CardContent></Card>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">{filter === 'all' ? '商品がありません。受信トレイから取り込むか、上のフォームでASINを追加してください。' : 'この絞り込みに該当する商品はありません。'}</CardContent></Card>
       ) : (
         <div className="space-y-2">
-          {items.map((l) => (
-            <Card key={l.id}>
-              <CardContent className="p-3 flex gap-3 items-start">
-                <input type="checkbox" className="mt-1.5" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {(() => { const sv = listingStatusView(l); return <Badge variant={sv.tone} title={sv.hint}>{sv.label}</Badge>; })()}
-                    <code className="text-xs text-muted-foreground">{l.sourceProductId}</code>
-                    {l.batchQuery && <Badge variant="muted">検索「{l.batchQuery}」</Badge>}
-                    {l.sourceInStock === false && <Badge variant="destructive">在庫なし</Badge>}
-                    {l.floorPriceJpy != null && l.sourcePriceJpy != null && l.sourcePriceJpy > l.floorPriceJpy && <Badge variant="destructive">赤字</Badge>}
+          {filtered.map((l) => {
+            const sv = listingStatusView(l);
+            return (
+              <Card key={l.id}>
+                <CardContent className="p-3 flex gap-3 items-start">
+                  <Checkbox className="mt-1.5" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={sv.tone} title={sv.hint}>{sv.label}</Badge>
+                      <code className="text-xs text-muted-foreground">{l.sourceProductId}</code>
+                      {l.batchQuery && <Badge variant="muted">検索「{l.batchQuery}」</Badge>}
+                      {l.sourceInStock === false && <Badge variant="destructive">在庫なし</Badge>}
+                      {l.floorPriceJpy != null && l.sourcePriceJpy != null && l.sourcePriceJpy > l.floorPriceJpy && <Badge variant="destructive">赤字</Badge>}
+                    </div>
+                    <Link href={`/listings/${l.id}`} className="text-sm font-medium truncate block hover:underline">{l.titleTranslated || l.titleJa || '(未取得)'}</Link>
+                    <Input className="h-7 text-xs" defaultValue={l.titleTranslated ?? ''} placeholder="韓国語タイトル（処理で自動／手動編集可）" onBlur={(e) => e.target.value !== (l.titleTranslated ?? '') && saveField(l.id, 'titleTranslated', e.target.value)} />
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>仕入 {yen(l.sourcePriceJpy)}</span>
+                      <span className="flex items-center gap-1">売価
+                        <Input className="h-6 w-24 text-xs" defaultValue={l.listPrice ?? ''} onBlur={(e) => Number(e.target.value.replace(/[^0-9]/g, '')) !== (l.listPrice ?? 0) && saveField(l.id, 'listPrice', e.target.value)} />
+                        {l.listCurrency}
+                      </span>
+                      <span>下限 {yen(l.floorPriceJpy)}</span>
+                    </div>
                   </div>
-                  <div className="text-sm font-medium truncate">{l.titleJa ?? '(未取得)'}</div>
-                  <Input
-                    className="h-7 text-xs"
-                    defaultValue={l.titleTranslated ?? ''}
-                    placeholder="韓国語タイトル（処理で自動／手動編集可）"
-                    onBlur={(e) => e.target.value !== (l.titleTranslated ?? '') && saveField(l.id, 'titleTranslated', e.target.value)}
-                  />
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>仕入 {yen(l.sourcePriceJpy)}</span>
-                    <span className="flex items-center gap-1">売価
-                      <Input
-                        className="h-6 w-24 text-xs"
-                        defaultValue={l.listPrice ?? ''}
-                        onBlur={(e) => Number(e.target.value.replace(/[^0-9]/g, '')) !== (l.listPrice ?? 0) && saveField(l.id, 'listPrice', e.target.value)}
-                      />
-                      {l.listCurrency}
-                    </span>
-                    <span>下限 {yen(l.floorPriceJpy)}</span>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doProcess(l.id)}>{busy.has(l.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}処理</Button>
+                    <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doPreview(l.id)}><Eye className="h-3.5 w-3.5" />プレビュー</Button>
+                    <Button size="sm" disabled={busy.has(l.id)} onClick={() => doSubmit(l.id)}><Send className="h-3.5 w-3.5" />送信</Button>
+                    {l.status === 'submitted' && <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doSync(l.id)}><RotateCw className="h-3.5 w-3.5" />同期</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => doDelete(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
-                </div>
-                <div className="flex flex-col gap-1 shrink-0">
-                  <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doProcess(l.id)}>
-                    {busy.has(l.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    処理
-                  </Button>
-                  <Button size="sm" variant="outline" disabled={busy.has(l.id)} onClick={() => doPreview(l.id)}>
-                    <Eye className="h-3.5 w-3.5" />
-                    プレビュー
-                  </Button>
-                  <Button size="sm" disabled={busy.has(l.id)} onClick={() => doSubmit(l.id)}>
-                    <Send className="h-3.5 w-3.5" />
-                    送信
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => doDelete(l.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -300,21 +296,14 @@ export function ListingsClient() {
                 <div>赤字下限：{yen(preview.data.preview.floorPriceJpy)}</div>
               </div>
               <div className="space-y-1">
-                <div className={`text-xs font-bold ${preview.data.validation.ready ? 'text-green-600' : 'text-red-600'}`}>
-                  {preview.data.validation.ready ? '✓ 送信可能' : '✕ 必須項目に不足あり'}
-                </div>
+                <div className={`text-xs font-bold ${preview.data.validation.ready ? 'text-green-600' : 'text-red-600'}`}>{preview.data.validation.ready ? '✓ 送信可能' : '✕ 必須項目に不足あり'}</div>
                 {preview.data.validation.warnings.map((w, i) => (
-                  <div key={i} className={`text-xs ${w.level === 'block' ? 'text-red-600' : 'text-amber-600'}`}>
-                    {w.level === 'block' ? '⛔' : '⚠️'} {w.msg}
-                  </div>
+                  <div key={i} className={`text-xs ${w.level === 'block' ? 'text-red-600' : 'text-amber-600'}`}>{w.level === 'block' ? '⛔' : '⚠️'} {w.msg}</div>
                 ))}
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" size="sm" onClick={() => setPreview(null)}>閉じる</Button>
-                <Button size="sm" disabled={!preview.data.validation.ready} onClick={() => { const id = preview.id; setPreview(null); doSubmit(id); }}>
-                  <Send className="h-3.5 w-3.5" />
-                  この内容で送信
-                </Button>
+                <Button size="sm" disabled={!preview.data.validation.ready} onClick={() => { const id = preview.id; setPreview(null); doSubmit(id); }}><Send className="h-3.5 w-3.5" />この内容で送信</Button>
               </div>
             </CardContent>
           </Card>
