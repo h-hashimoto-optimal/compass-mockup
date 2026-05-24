@@ -33,6 +33,8 @@ export async function processListing(tenantId: string, listingId: string) {
     .select({
       id: channelListings.id,
       channel: channelListings.channel,
+      status: channelListings.status,
+      coupangApprovalStatus: channelListings.coupangApprovalStatus,
       titleJa: channelListings.titleJa,
       sourceRowId: sourceProducts.id,
       source: sourceProducts.source,
@@ -51,6 +53,10 @@ export async function processListing(tenantId: string, listingId: string) {
     )
     .limit(1);
   if (!row) throw new Error('NOT_FOUND');
+  // 審査中・販売中（却下以外のsubmitted）は再処理不可＝Coupang連携済みの内容を壊さない
+  if (row.status === 'submitted' && row.coupangApprovalStatus !== 'rejected') {
+    throw new Error('NOT_PROCESSABLE');
+  }
 
   // 1. 仕入元から取得（ソース別アダプタ。今はamazonのみ）。
   //    拡張がスクレイプ済みの実データ（価格/画像/ブランド）をhintで渡し、mockでも実値を維持する。

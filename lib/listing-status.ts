@@ -9,6 +9,19 @@ export type ListingStatusInput = {
   coupangSalesStatus?: string | null;
 };
 
+// ステータスに応じて許可する操作（UI／サーバ共通の単一ソース）。
+//   出品準備(process)＝draft/ready/error/却下のみ（審査中・販売中は再処理不可）
+//   送信(submit)＝送信待ち/error/却下のみ（draftは要準備、審査中・販売中は再送不可）
+//   状態同期(reconcile)＝submittedのみ
+export function listingActions(s: ListingStatusInput) {
+  const fixable = s.status === 'submitted' && s.coupangApprovalStatus === 'rejected';
+  return {
+    canProcess: s.status === 'draft' || s.status === 'ready' || s.status === 'error' || fixable,
+    canSubmit: s.status === 'ready' || s.status === 'error' || fixable,
+    canReconcile: s.status === 'submitted',
+  };
+}
+
 export function listingStatusView(s: ListingStatusInput): StatusView {
   const ap = s.coupangApprovalStatus ?? null;
   const sl = s.coupangSalesStatus ?? null;

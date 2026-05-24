@@ -1,6 +1,6 @@
 // 単一商品をCoupangへ送る（送信アクション）。
 // 認証情報が無い／本送信未有効化なら dry-run（実送信せず）。鍵が揃い COUPANG_LIVE_SEND=1 のときだけ本送信。
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { withTenant } from '@/lib/db';
 import { channelListings } from '@/lib/db/schema';
 import { signRequest } from '@/lib/channels/coupang/hmac';
@@ -15,6 +15,18 @@ async function getCoupangCreds(tenantId: string): Promise<{ vendorId: string; ac
 }
 
 export async function submitListing(tenantId: string, listingId: string) {
+  // 既に審査中/承認済み/販売中（却下以外のsubmitted）は再送しない
+  const [cur] = await withTenant(tenantId, (tx) =>
+    tx
+      .select({ status: channelListings.status, coupangApprovalStatus: channelListings.coupangApprovalStatus })
+      .from(channelListings)
+      .where(and(eq(channelListings.id, listingId), eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)))
+      .limit(1),
+  );
+  if (cur && cur.status === 'submitted' && cur.coupangApprovalStatus !== 'rejected') {
+    return { mode: 'already_submitted' as const, reason: '既に送信済み（審査中／販売中）です' };
+  }
+
   const pv = await previewListing(tenantId, listingId);
 
   // 必須項目に欠落（block）があれば送らない

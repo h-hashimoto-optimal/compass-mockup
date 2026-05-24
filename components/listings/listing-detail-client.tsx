@@ -3,13 +3,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Trash2, Cog, Eye, Send, Loader2, AlertTriangle, Info, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Cog, Eye, Send, Loader2, AlertTriangle, Info, ShieldAlert, RotateCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatJPY, formatKRW, formatDateTime } from '@/lib/utils';
-import { listingStatusView } from '@/lib/listing-status';
+import { listingStatusView, listingActions } from '@/lib/listing-status';
 
 type Detail = {
   id: string; channel: string; status: string;
@@ -62,7 +62,7 @@ export function ListingDetailClient({ id }: { id: string }) {
     });
     setBusy(null); setSaved(true); setTimeout(() => setSaved(false), 2000); load();
   };
-  const act = async (kind: 'process' | 'submit') => {
+  const act = async (kind: 'process' | 'submit' | 'reconcile') => {
     setBusy(kind);
     await fetch('/api/listings/' + id + '/' + kind, { method: 'POST' });
     setBusy(null); load(); if (kind === 'process') setPreview(null);
@@ -84,6 +84,7 @@ export function ListingDetailClient({ id }: { id: string }) {
   if (!d) return <p className="text-sm text-muted-foreground">読み込み中…</p>;
 
   const st = listingStatusView(d);
+  const a = listingActions(d);
   const loss = d.floorPriceJpy != null && d.sourcePriceJpy != null && d.sourcePriceJpy > d.floorPriceJpy;
 
   return (
@@ -99,15 +100,24 @@ export function ListingDetailClient({ id }: { id: string }) {
           <p className="text-sm text-muted-foreground mt-1 font-mono">{d.source}:{d.sourceProductId} → {d.channel}</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={() => act('process')} disabled={!!busy}>
-            {busy === 'process' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cog className="h-4 w-4" />}処理
-          </Button>
+          {a.canProcess && (
+            <Button variant="outline" size="sm" onClick={() => act('process')} disabled={!!busy} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算">
+              {busy === 'process' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cog className="h-4 w-4" />}出品準備
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={doPreview} disabled={!!busy}>
             {busy === 'preview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}プレビュー
           </Button>
-          <Button size="sm" onClick={() => act('submit')} disabled={!!busy}>
-            {busy === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}送信
-          </Button>
+          {a.canSubmit && (
+            <Button size="sm" onClick={() => act('submit')} disabled={!!busy}>
+              {busy === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}送信
+            </Button>
+          )}
+          {a.canReconcile && (
+            <Button variant="outline" size="sm" onClick={() => act('reconcile')} disabled={!!busy}>
+              {busy === 'reconcile' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}状態同期
+            </Button>
+          )}
         </div>
       </div>
 

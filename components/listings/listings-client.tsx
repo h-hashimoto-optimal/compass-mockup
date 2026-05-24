@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { listingStatusView } from '@/lib/listing-status';
+import { listingStatusView, listingActions } from '@/lib/listing-status';
 
 type Listing = {
   id: string;
@@ -135,12 +135,13 @@ export function ListingsClient() {
       setB(key, false);
     }
   };
-  const doProcess = async (id: string) => { const r = await act(id, 'process'); setMsg(r.ok ? '出品準備しました（取得・翻訳・価格）' : '処理に失敗'); load(); };
+  const doProcess = async (id: string) => { const r = await act(id, 'process'); setMsg(r.ok ? '出品準備しました（取得・翻訳・価格）' : (r.json as { error?: string }).error === 'NOT_PROCESSABLE' ? '審査中／販売中は再処理できません' : '処理に失敗'); load(); };
   const doPreview = async (id: string) => { const r = await act(id, 'preview'); if (r.ok) setPreview({ id, data: r.json as PreviewData }); else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗'); };
   const doSubmit = async (id: string) => {
     const r = await act(id, 'submit');
     const j = r.json as { mode?: string; warnings?: string[]; reason?: string };
     if (j.mode === 'blocked') setMsg('送信不可：' + (j.warnings ?? []).join(' / '));
+    else if (j.mode === 'already_submitted') setMsg('既に送信済み（審査中／販売中）です');
     else if (j.mode === 'mock') setMsg('擬似送信しました（審査中）');
     else if (j.mode === 'dry-run') setMsg('dry-run（' + (j.reason ?? '認証情報未設定') + '）');
     else setMsg('Coupangへ送信しました');
@@ -244,6 +245,7 @@ export function ListingsClient() {
         <div className="space-y-2">
           {filtered.map((l) => {
             const sv = listingStatusView(l);
+            const a = listingActions(l);
             return (
               <Card key={l.id}>
                 <CardContent className="p-3 flex gap-3 items-start">
@@ -268,9 +270,9 @@ export function ListingsClient() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
-                    <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doProcess(l.id)} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算（送信待ちにする）">{busy.has(`${l.id}:process`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}出品準備</Button>
+                    <Button size="sm" variant="outline" disabled={rowBusy(l.id) || !a.canProcess} onClick={() => doProcess(l.id)} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算（送信待ちにする）">{busy.has(`${l.id}:process`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}出品準備</Button>
                     <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doPreview(l.id)}>{busy.has(`${l.id}:preview`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}プレビュー</Button>
-                    <Button size="sm" disabled={rowBusy(l.id)} onClick={() => doSubmit(l.id)}>{busy.has(`${l.id}:submit`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}送信</Button>
+                    <Button size="sm" disabled={rowBusy(l.id) || !a.canSubmit} onClick={() => doSubmit(l.id)}>{busy.has(`${l.id}:submit`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}送信</Button>
                     {l.status === 'submitted' && <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doSync(l.id)}>{busy.has(`${l.id}:reconcile`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}同期</Button>}
                     <Button size="sm" variant="ghost" disabled={rowBusy(l.id)} onClick={() => doDelete(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>

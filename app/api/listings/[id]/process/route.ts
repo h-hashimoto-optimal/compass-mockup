@@ -14,7 +14,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ ok: true, listing });
   } catch (e) {
     const msg = (e as Error).message;
-    const status = msg === 'NOT_FOUND' ? 404 : msg === 'UNSUPPORTED_SOURCE' ? 400 : 500;
+    const status =
+      msg === 'NOT_FOUND' ? 404 : msg === 'NOT_PROCESSABLE' ? 409 : msg === 'UNSUPPORTED_SOURCE' ? 400 : 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }
