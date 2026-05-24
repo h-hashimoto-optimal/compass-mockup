@@ -179,9 +179,9 @@ export async function getTenantListing(tenantId: string, id: string) {
   });
 }
 
-// テナントの出品一覧（仕入元情報を結合・soft-delete除外）
+// テナントの出品一覧（仕入元情報を結合・soft-delete除外）。サムネイル画像も付与。
 export async function listTenantListings(tenantId: string) {
-  return withTenant(tenantId, (tx) =>
+  const rows = await withTenant(tenantId, (tx) =>
     tx
       .select({
         id: channelListings.id,
@@ -198,6 +198,7 @@ export async function listTenantListings(tenantId: string) {
         sourceProductId: sourceProducts.sourceProductId,
         sourcePriceJpy: sourceProducts.lastPriceJpy,
         sourceInStock: sourceProducts.lastInStock,
+        sourceRaw: sourceProducts.raw,
         batchQuery: ingestBatches.query,
         batchCapturedAt: ingestBatches.capturedAt,
         createdAt: channelListings.createdAt,
@@ -208,4 +209,10 @@ export async function listTenantListings(tenantId: string) {
       .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)))
       .orderBy(desc(channelListings.createdAt)),
   );
+  return rows.map((r) => {
+    const raw = (r.sourceRaw ?? {}) as { imageUrls?: string[] };
+    const { sourceRaw: _omit, ...rest } = r;
+    void _omit;
+    return { ...rest, image: raw.imageUrls?.[0] ?? null };
+  });
 }

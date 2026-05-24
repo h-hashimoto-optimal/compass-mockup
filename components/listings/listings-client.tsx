@@ -27,6 +27,7 @@ type Listing = {
   sourceInStock: boolean | null;
   batchQuery: string | null;
   batchCapturedAt: string | null;
+  image: string | null;
 };
 
 type PreviewData = {
@@ -246,6 +247,8 @@ export function ListingsClient() {
               <Card key={l.id}>
                 <CardContent className="p-3 flex gap-3 items-start">
                   <Checkbox className="mt-1.5" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={l.image || `https://picsum.photos/seed/${l.sourceProductId}/80/80`} alt="" className="h-14 w-14 rounded border object-cover bg-muted shrink-0" />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={sv.tone} title={sv.hint}>{sv.label}</Badge>
