@@ -54,14 +54,25 @@ export async function submitListing(tenantId: string, listingId: string) {
     /* keep */
   }
   const ok = res.ok;
+  // Coupangが返す sellerProductId（あれば保持）。後続の状態同期(reconcile)で承認/販売を更新する。
+  const sellerProductId =
+    json && typeof json === 'object'
+      ? String((json as Record<string, unknown>).data ?? '') || null
+      : null;
   await withTenant(tenantId, (tx) =>
     tx
       .update(channelListings)
-      .set({
-        status: ok ? 'pending' : 'error', // 受付＝審査中。却下/エラーは後続の状態同期で更新
-        lastSyncedAt: new Date(),
-        rejectedReason: ok ? null : text.slice(0, 500),
-      })
+      .set(
+        ok
+          ? {
+              status: 'submitted', // Coupang登録要求を送信
+              coupangApprovalStatus: 'requested', // = 審査中（승인대기）。承認/販売は状態同期で反映
+              channelProductId: sellerProductId,
+              lastSyncedAt: new Date(),
+              rejectedReason: null,
+            }
+          : { status: 'error', lastSyncedAt: new Date(), rejectedReason: text.slice(0, 500) },
+      )
       .where(and(eq(channelListings.id, listingId), eq(channelListings.tenantId, tenantId))),
   );
 

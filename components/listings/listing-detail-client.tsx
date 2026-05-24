@@ -9,9 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatJPY, formatKRW, formatDateTime } from '@/lib/utils';
+import { listingStatusView } from '@/lib/listing-status';
 
 type Detail = {
   id: string; channel: string; status: string;
+  coupangApprovalStatus: string | null; coupangSalesStatus: string | null;
   titleJa: string | null; titleTranslated: string | null;
   listPrice: number | null; listCurrency: string; floorPriceJpy: number | null;
   rejectedReason: string | null;
@@ -24,16 +26,6 @@ type Preview = {
   preview: { brand: string; ipBrand: { brand: string; level: string } | null; category: string; images: string[] };
   validation: { ready: boolean; warnings: { level: 'block' | 'info'; msg: string }[] };
   payload: unknown;
-};
-
-const statusMap: Record<string, { label: string; variant: 'muted' | 'info' | 'success' | 'warning' | 'destructive' }> = {
-  draft: { label: '下書き', variant: 'muted' },
-  pending: { label: '送信待ち', variant: 'info' },
-  live: { label: '出品中', variant: 'success' },
-  stopped: { label: '停止', variant: 'warning' },
-  rejected: { label: '却下', variant: 'destructive' },
-  deleted: { label: '削除', variant: 'muted' },
-  error: { label: 'エラー', variant: 'destructive' },
 };
 
 export function ListingDetailClient({ id }: { id: string }) {
@@ -91,7 +83,7 @@ export function ListingDetailClient({ id }: { id: string }) {
   if (notFound) return <div className="max-w-2xl mx-auto p-8 text-center text-sm text-muted-foreground">出品が見つかりません（削除済み、または他店舗の出品です）。<div className="mt-3"><Link href="/listings" className="text-primary hover:underline">一覧へ戻る</Link></div></div>;
   if (!d) return <p className="text-sm text-muted-foreground">読み込み中…</p>;
 
-  const st = statusMap[d.status] ?? { label: d.status, variant: 'muted' as const };
+  const st = listingStatusView(d);
   const loss = d.floorPriceJpy != null && d.sourcePriceJpy != null && d.sourcePriceJpy > d.floorPriceJpy;
 
   return (
@@ -102,7 +94,7 @@ export function ListingDetailClient({ id }: { id: string }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold truncate">{d.titleTranslated || d.titleJa || '（無題）'}</h1>
-            <Badge variant={st.variant}>{st.label}</Badge>
+            <Badge variant={st.tone} title={st.hint}>{st.label}</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1 font-mono">{d.source}:{d.sourceProductId} → {d.channel}</p>
         </div>

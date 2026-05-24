@@ -34,10 +34,10 @@ const proc = await J(await post(A, '/api/listings/bulk', { ids: [id1, id2], acti
 const procOk = (proc.results || []).filter((r) => r.ok).length;
 console.log(`1) 一括処理: ok=${procOk}/2 => ${P(procOk === 2)}`);
 
-// 2) 処理後はpending
+// 2) 処理後はready（送信待ち）
 const after = await J(await get(A, '/api/listings'));
-const pendings = (after.listings || []).filter((l) => l.status === 'pending').length;
-console.log(`2) 処理後pending化: ${pendings}/2 => ${P(pendings === 2)}`);
+const readys = (after.listings || []).filter((l) => l.status === 'ready').length;
+console.log(`2) 処理後ready(送信待ち)化: ${readys}/2 => ${P(readys === 2)}`);
 
 // 3) 一括送信（結果が2件返る。鍵/画像により mode/blocked いずれか）
 const sub = await J(await post(A, '/api/listings/bulk', { ids: [id1, id2], action: 'submit' }));

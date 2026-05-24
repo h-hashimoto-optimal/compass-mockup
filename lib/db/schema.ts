@@ -143,7 +143,9 @@ export const channelListings = pgTable(
     listCurrency: text('list_currency').notNull().default('KRW'),
     sourcePriceJpyAtList: integer('source_price_jpy_at_list'),
     floorPriceJpy: integer('floor_price_jpy'), // 赤字下限（円）
-    status: text('status').notNull().default('draft'), // draft/pending/live/stopped/rejected/deleted/error
+    status: text('status').notNull().default('draft'), // ローカル段階: draft/ready/submitted/error
+    coupangApprovalStatus: text('coupang_approval_status'), // 承認: requested/approved/partial_approved/rejected/deleted
+    coupangSalesStatus: text('coupang_sales_status'), // 販売: on_sale/suspended/soldout
     rejectedReason: text('rejected_reason'),
     channelMeta: jsonb('channel_meta'), // チャネル固有（고시정보/원산지/A/S 等）
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),

@@ -7,16 +7,19 @@ export type Source = (typeof SOURCES)[number];
 export const CHANNELS = ['coupang', 'naver', '11st'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const LISTING_STATUS = [
-  'draft',
-  'pending',
-  'live',
-  'stopped',
-  'rejected',
-  'deleted',
-  'error',
-] as const;
+// ローカル出品パイプラインの段階（自前管理）。Coupang側の承認/販売は別フィールドで持つ。
+//   draft=未処理 / ready=送信待ち(翻訳・価格計算済) / submitted=Coupang登録要求済 / error=送信失敗
+export const LISTING_STATUS = ['draft', 'ready', 'submitted', 'error'] as const;
 export type ListingStatus = (typeof LISTING_STATUS)[number];
+
+// Coupang 承認(登録)ステータス＝seller-product。送信後に状態同期(reconcile)で反映。
+//   requested=審査中(승인대기) / approved=승인완료 / partial_approved=부분승인 / rejected=반려 / deleted=삭제
+export const COUPANG_APPROVAL_STATUS = ['requested', 'approved', 'partial_approved', 'rejected', 'deleted'] as const;
+export type CoupangApprovalStatus = (typeof COUPANG_APPROVAL_STATUS)[number];
+
+// Coupang 販売ステータス＝vendorItem（承認後）。on_sale=판매중 / suspended=판매중지 / soldout=품절
+export const COUPANG_SALES_STATUS = ['on_sale', 'suspended', 'soldout'] as const;
+export type CoupangSalesStatus = (typeof COUPANG_SALES_STATUS)[number];
 
 export const ALERT_TYPES = ['price_up_loss', 'out_of_stock'] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];

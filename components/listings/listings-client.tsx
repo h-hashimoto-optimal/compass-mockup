@@ -6,11 +6,14 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { listingStatusView } from '@/lib/listing-status';
 
 type Listing = {
   id: string;
   channel: string;
   status: string;
+  coupangApprovalStatus: string | null;
+  coupangSalesStatus: string | null;
   titleJa: string | null;
   titleTranslated: string | null;
   listPrice: number | null;
@@ -32,23 +35,6 @@ type PreviewData = {
 const yen = (n: number | null) => (n == null ? '—' : `¥${n.toLocaleString('ja-JP')}`);
 const krw = (n: number | null, c = 'KRW') => (n == null ? '—' : `${n.toLocaleString('ja-JP')} ${c}`);
 
-const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-600',
-  pending: 'bg-blue-100 text-blue-700',
-  live: 'bg-green-100 text-green-700',
-  stopped: 'bg-amber-100 text-amber-700',
-  rejected: 'bg-red-100 text-red-700',
-  error: 'bg-red-100 text-red-700',
-};
-// pending=翻訳・価格計算済みで「送信待ち」。実際のCoupang送信は「送信」ボタンで（今は鍵未設定でdry-run）
-const STATUS_LABEL: Record<string, string> = {
-  draft: '未処理',
-  pending: '送信待ち',
-  live: '出品中',
-  stopped: '停止',
-  rejected: '却下',
-  error: 'エラー',
-};
 
 export function ListingsClient() {
   const [items, setItems] = React.useState<Listing[]>([]);
@@ -230,7 +216,7 @@ export function ListingsClient() {
                 <input type="checkbox" className="mt-1.5" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`badge rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[l.status] ?? 'bg-slate-100 text-slate-600'}`}>{STATUS_LABEL[l.status] ?? l.status}</span>
+                    {(() => { const sv = listingStatusView(l); return <Badge variant={sv.tone} title={sv.hint}>{sv.label}</Badge>; })()}
                     <code className="text-xs text-muted-foreground">{l.sourceProductId}</code>
                     {l.batchQuery && <Badge variant="muted">検索「{l.batchQuery}」</Badge>}
                     {l.sourceInStock === false && <Badge variant="destructive">在庫なし</Badge>}

@@ -81,6 +81,8 @@ export async function listBatchItems(tenantId: string, batchId: string) {
       .select({
         id: channelListings.id,
         status: channelListings.status,
+        coupangApprovalStatus: channelListings.coupangApprovalStatus,
+        coupangSalesStatus: channelListings.coupangSalesStatus,
         titleJa: channelListings.titleJa,
         titleTranslated: channelListings.titleTranslated,
         listPrice: channelListings.listPrice,
@@ -110,6 +112,8 @@ export async function listBatchItems(tenantId: string, batchId: string) {
     return {
       id: r.id,
       status: r.status,
+      coupangApprovalStatus: r.coupangApprovalStatus,
+      coupangSalesStatus: r.coupangSalesStatus,
       titleJa: r.titleJa,
       titleTranslated: r.titleTranslated,
       listPrice: r.listPrice,

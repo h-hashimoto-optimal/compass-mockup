@@ -114,7 +114,7 @@ export async function processListing(tenantId: string, listingId: string) {
       listCurrency: cs?.currency ?? 'KRW',
       sourcePriceJpyAtList: detail.priceJpy ?? null,
       floorPriceJpy,
-      status: 'pending',
+      status: 'ready', // 翻訳・価格計算済み＝送信待ち（まだCoupang未送信）
     })
     .where(eq(channelListings.id, listingId))
     .returning();

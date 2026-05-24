@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { listingStatusView } from '@/lib/listing-status';
 
 type Batch = {
   id: string;
@@ -21,6 +22,8 @@ type Batch = {
 type Item = {
   id: string;
   status: string;
+  coupangApprovalStatus: string | null;
+  coupangSalesStatus: string | null;
   titleJa: string | null;
   titleTranslated: string | null;
   sourceProductId: string;
@@ -30,7 +33,6 @@ type Item = {
 
 const yen = (n: number | null) => (n == null ? '—' : `¥${n.toLocaleString('ja-JP')}`);
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
-const statusJa: Record<string, string> = { draft: '未処理', pending: '送信待ち', live: '出品中', stopped: '停止', rejected: '却下', error: 'エラー' };
 
 export function InboxClient() {
   const [batches, setBatches] = React.useState<Batch[]>([]);
@@ -173,7 +175,7 @@ export function InboxClient() {
                       <div className="text-sm font-medium truncate">{it.titleTranslated || it.titleJa || '(タイトル未取得)'}</div>
                       <div className="text-xs text-muted-foreground"><code>{it.sourceProductId}</code> ・ 仕入 {yen(it.sourcePriceJpy)}</div>
                     </div>
-                    <Badge variant={isDraft ? 'muted' : it.status === 'live' ? 'success' : it.status === 'rejected' || it.status === 'error' ? 'destructive' : 'info'}>{statusJa[it.status] ?? it.status}</Badge>
+                    {(() => { const sv = listingStatusView(it); return <Badge variant={sv.tone} title={sv.hint}>{sv.label}</Badge>; })()}
                     {!isDraft && <Link href={`/listings/${it.id}`} className="text-xs text-primary underline shrink-0">詳細</Link>}
                   </CardContent>
                 </Card>

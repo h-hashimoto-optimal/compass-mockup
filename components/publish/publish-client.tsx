@@ -17,26 +17,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatKRW } from '@/lib/utils';
+import { listingStatusView } from '@/lib/listing-status';
 
 type Listing = {
   id: string;
   status: string;
+  coupangApprovalStatus: string | null;
+  coupangSalesStatus: string | null;
   titleJa: string | null;
   titleTranslated: string | null;
   listPrice: number | null;
   listCurrency: string;
   source: string;
   sourceProductId: string;
-};
-
-const statusMap: Record<string, { label: string; variant: 'muted' | 'info' | 'success' | 'warning' | 'destructive' }> = {
-  draft: { label: '下書き', variant: 'muted' },
-  pending: { label: '送信待ち', variant: 'info' },
-  live: { label: '出品中', variant: 'success' },
-  stopped: { label: '停止', variant: 'warning' },
-  rejected: { label: '却下', variant: 'destructive' },
-  deleted: { label: '削除', variant: 'muted' },
-  error: { label: 'エラー', variant: 'destructive' },
 };
 
 type Result = { ok: boolean; mode?: string; error?: string };
@@ -57,14 +50,15 @@ export function PublishClient() {
   }, []);
   React.useEffect(load, [load]);
 
-  // 出品作業対象（出品中・削除以外）。送信待ち→送信、下書き→処理してから送信。
-  const actionable = items.filter((l) => l.status !== 'live' && l.status !== 'deleted');
+  // 出品作業対象＝まだCoupang送信が完了していないもの（draft/ready/error/却下）。送信済(submitted)は除く。
+  const isNg = (l: Listing) => l.status === 'error' || (l.status === 'submitted' && l.coupangApprovalStatus === 'rejected');
+  const actionable = items.filter((l) => l.status === 'draft' || l.status === 'ready' || isNg(l));
   const counts = {
     total: items.length,
-    pending: items.filter((l) => l.status === 'pending').length,
     draft: items.filter((l) => l.status === 'draft').length,
-    live: items.filter((l) => l.status === 'live').length,
-    ng: items.filter((l) => l.status === 'rejected' || l.status === 'error').length,
+    ready: items.filter((l) => l.status === 'ready').length,
+    submitted: items.filter((l) => l.status === 'submitted' && l.coupangApprovalStatus !== 'rejected').length,
+    ng: items.filter((l) => isNg(l)).length,
   };
 
   const toggle = (id: string) =>
@@ -78,6 +72,7 @@ export function PublishClient() {
     setSel(allSelected ? new Set() : new Set(actionable.map((l) => l.id)));
   const selectByStatus = (status: string) =>
     setSel(new Set(items.filter((l) => l.status === status).map((l) => l.id)));
+  const selectNg = () => setSel(new Set(items.filter(isNg).map((l) => l.id)));
 
   const run = async (action: 'process' | 'submit') => {
     const ids = [...sel];
@@ -114,10 +109,10 @@ export function PublishClient() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="合計" value={counts.total} />
-        <Stat label="下書き" value={counts.draft} onClick={() => selectByStatus('draft')} />
-        <Stat label="送信待ち" value={counts.pending} onClick={() => selectByStatus('pending')} />
-        <Stat label="出品中" value={counts.live} tone="ok" />
-        <Stat label="却下/エラー" value={counts.ng} tone={counts.ng > 0 ? 'bad' : undefined} onClick={() => selectByStatus('rejected')} />
+        <Stat label="未処理" value={counts.draft} onClick={() => selectByStatus('draft')} />
+        <Stat label="送信待ち" value={counts.ready} onClick={() => selectByStatus('ready')} />
+        <Stat label="送信済み" value={counts.submitted} tone="ok" />
+        <Stat label="却下/エラー" value={counts.ng} tone={counts.ng > 0 ? 'bad' : undefined} onClick={selectNg} />
       </div>
 
       {doneTotal > 0 && (
@@ -162,7 +157,7 @@ export function PublishClient() {
                 <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-10">出品対象がありません。<Link href="/products" className="text-primary hover:underline">受信トレイ</Link>からASINを取り込んでください。</TableCell></TableRow>
               ) : (
                 actionable.map((l) => {
-                  const st = statusMap[l.status] ?? { label: l.status, variant: 'muted' as const };
+                  const st = listingStatusView(l);
                   const res = results[l.id];
                   return (
                     <TableRow key={l.id}>
@@ -172,7 +167,7 @@ export function PublishClient() {
                         <div className="text-[11px] text-muted-foreground font-mono">{l.source}:{l.sourceProductId}</div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{l.listPrice != null ? formatKRW(l.listPrice) : '—'}</TableCell>
-                      <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
+                      <TableCell><Badge variant={st.tone} title={st.hint}>{st.label}</Badge></TableCell>
                       <TableCell>
                         {res ? (
                           res.ok ? (
