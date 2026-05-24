@@ -104,11 +104,11 @@ export function ListingsClient() {
   const doSubmit = async (id: string) => {
     const r = await act(id, 'submit');
     const j = r.json as { mode?: string; warnings?: string[]; reason?: string };
-    if (j.mode === 'blocked') setMsg('送信不可：' + (j.warnings ?? []).join(' / '));
-    else if (j.mode === 'already_submitted') setMsg('既に送信済み（審査中／販売中）です');
-    else if (j.mode === 'mock') setMsg('擬似送信しました（審査中）');
+    if (j.mode === 'blocked') setMsg('出品申請できません：' + (j.warnings ?? []).join(' / '));
+    else if (j.mode === 'already_submitted') setMsg('既に出品申請済み（審査中／販売中）です');
+    else if (j.mode === 'mock') setMsg('擬似で出品申請しました（審査中）');
     else if (j.mode === 'dry-run') setMsg('dry-run（' + (j.reason ?? '認証情報未設定') + '）');
-    else setMsg('Coupangへ送信しました');
+    else setMsg('Coupangへ出品申請しました');
     load();
   };
   const doSync = async (id: string) => { const r = await act(id, 'reconcile'); setMsg(r.ok ? '状態同期しました' : '同期：対象外（送信済みのみ）'); load(); };
@@ -123,7 +123,7 @@ export function ListingsClient() {
     if (!ids.length) return;
     if (action === 'delete' && !confirm(`${ids.length}件を削除しますか？`)) return;
     setBulkBusy(true);
-    const label = { process: '出品準備', submit: '送信', reconcile: '状態同期', delete: '削除' }[action];
+    const label = { process: '出品準備', submit: '出品申請', reconcile: '状態同期', delete: '削除' }[action];
     setMsg(`一括${label}中…（${ids.length}件）`);
     if (action === 'delete') {
       await Promise.all(ids.map((id) => fetch(`/api/listings/${id}`, { method: 'DELETE' })));
@@ -179,7 +179,7 @@ export function ListingsClient() {
           <>
             <span className="text-sm text-muted-foreground">{selected.size}件</span>
             <Button size="sm" disabled={bulkBusy} onClick={() => bulk('process')} title="Amazon取得→翻訳→価格計算"><Cog className="h-3.5 w-3.5" />出品準備</Button>
-            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('submit')}><Send className="h-3.5 w-3.5" />送信</Button>
+            <Button size="sm" disabled={bulkBusy} onClick={() => bulk('submit')}><Send className="h-3.5 w-3.5" />出品申請</Button>
             <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulk('reconcile')}><RotateCw className="h-3.5 w-3.5" />同期</Button>
             <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => bulk('delete')}><Trash2 className="h-3.5 w-3.5" />削除</Button>
           </>
@@ -223,7 +223,7 @@ export function ListingsClient() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
-                    {a.canProcess && <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doProcess(l.id)} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算（送信待ちにする）">{busy.has(`${l.id}:process`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}出品準備</Button>}
+                    {a.canProcess && <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doProcess(l.id)} title="Amazon情報取得 → 翻訳 → 価格・赤字下限を計算（出品待ちにする）">{busy.has(`${l.id}:process`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cog className="h-3.5 w-3.5" />}出品準備</Button>}
                     <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doPreview(l.id)}>{busy.has(`${l.id}:preview`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}プレビュー</Button>
                     {a.canSubmit && <Button size="sm" disabled={rowBusy(l.id)} onClick={() => doSubmit(l.id)}>{busy.has(`${l.id}:submit`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}送信</Button>}
                     {a.canReconcile && <Button size="sm" variant="outline" disabled={rowBusy(l.id)} onClick={() => doSync(l.id)}>{busy.has(`${l.id}:reconcile`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}同期</Button>}
@@ -271,7 +271,7 @@ export function ListingsClient() {
                 <div>在庫：{preview.data.preview.inStock === false ? '欠品' : 'あり'}</div>
               </div>
               <div className="space-y-1">
-                <div className={`text-xs font-bold ${preview.data.validation.ready ? 'text-green-600' : 'text-red-600'}`}>{preview.data.validation.ready ? '✓ 送信可能' : '✕ 必須項目に不足あり'}</div>
+                <div className={`text-xs font-bold ${preview.data.validation.ready ? 'text-green-600' : 'text-red-600'}`}>{preview.data.validation.ready ? '✓ 出品申請できます' : '✕ 必須項目に不足あり'}</div>
                 {preview.data.validation.warnings.map((w, i) => (
                   <div key={i} className={`text-xs ${w.level === 'block' ? 'text-red-600' : 'text-amber-600'}`}>{w.level === 'block' ? '⛔' : '⚠️'} {w.msg}</div>
                 ))}
@@ -279,7 +279,7 @@ export function ListingsClient() {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Link href={`/listings/${preview.id}`} className="mr-auto text-xs text-primary hover:underline">詳細を開く →</Link>
                 <Button variant="outline" size="sm" onClick={() => setPreview(null)}>閉じる</Button>
-                <Button size="sm" disabled={!preview.data.validation.ready} onClick={() => { const id = preview.id; setPreview(null); doSubmit(id); }}><Send className="h-3.5 w-3.5" />この内容で送信</Button>
+                <Button size="sm" disabled={!preview.data.validation.ready} onClick={() => { const id = preview.id; setPreview(null); doSubmit(id); }}><Send className="h-3.5 w-3.5" />この内容で出品申請</Button>
               </div>
             </CardContent>
           </Card>

@@ -162,7 +162,7 @@ export function ListingDetailClient({ id }: { id: string }) {
           </Button>
           {a.canSubmit && (
             <Button size="sm" onClick={() => act('submit')} disabled={!!busy}>
-              {busy === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}送信
+              {busy === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}出品申請
             </Button>
           )}
           {a.canReconcile && (
