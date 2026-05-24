@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentTenantId } from '@/lib/tenant';
-import { ingestListing, listTenantListings } from '@/lib/data/listings';
+import { ingestListing, queryListings } from '@/lib/data/listings';
+import type { ListingGroup } from '@/lib/listing-status';
 import { SOURCES, CHANNELS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -12,10 +13,18 @@ function toInt(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const tenantId = await currentTenantId();
   if (!tenantId) return NextResponse.json({ error: 'テナント文脈がありません' }, { status: 403 });
-  return NextResponse.json({ listings: await listTenantListings(tenantId) });
+  const sp = new URL(req.url).searchParams;
+  const r = await queryListings(tenantId, {
+    q: sp.get('q') ?? undefined,
+    group: (sp.get('group') as ListingGroup | 'all' | null) ?? 'all',
+    page: sp.get('page') ? parseInt(sp.get('page')!, 10) : 1,
+    pageSize: sp.get('pageSize') ? parseInt(sp.get('pageSize')!, 10) : 20,
+  });
+  // 後方互換: listings キーでも返す（既存呼び出し向け）
+  return NextResponse.json({ listings: r.items, ...r });
 }
 
 export async function POST(req: Request) {

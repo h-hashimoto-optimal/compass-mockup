@@ -22,6 +22,22 @@ export function listingActions(s: ListingStatusInput) {
   };
 }
 
+// 一覧フィルタの群（業務上のまとまり）
+export type ListingGroup = 'draft' | 'ready' | 'review' | 'selling' | 'attention';
+export function listingGroup(s: ListingStatusInput): ListingGroup {
+  const ap = s.coupangApprovalStatus ?? null;
+  if (s.status === 'draft') return 'draft';
+  if (s.status === 'ready') return 'ready';
+  if (s.status === 'error') return 'attention';
+  if (s.status === 'submitted') {
+    if (ap === 'rejected' || ap === 'deleted') return 'attention';
+    if (ap === 'requested' || ap == null) return 'review';
+    if (s.coupangSalesStatus === 'suspended' || s.coupangSalesStatus === 'soldout') return 'attention';
+    return 'selling';
+  }
+  return 'attention';
+}
+
 export function listingStatusView(s: ListingStatusInput): StatusView {
   const ap = s.coupangApprovalStatus ?? null;
   const sl = s.coupangSalesStatus ?? null;

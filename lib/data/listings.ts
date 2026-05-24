@@ -1,10 +1,11 @@
 // テナント・スコープのデータアクセス層（仕入商品→出品）。
 // channel_listings は RLS 対象 → withTenant 経由（app.current_tenant をセット）。
 // アプリ層でも tenant_id で絞り、soft-delete(deleted_at IS NULL) を強制する＝二重の漏洩防止。
-import { and, desc, eq, isNull, ne, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, or, ilike, inArray, count } from 'drizzle-orm';
 import { withTenant } from '@/lib/db';
 import { sourceProducts, channelListings, ingestBatches } from '@/lib/db/schema';
 import { isBlacklisted } from '@/lib/data/lists';
+import { listingGroup, type ListingGroup } from '@/lib/listing-status';
 
 export type IngestInput = {
   source: string; // amazon / rakuten / yahoo / mercari
@@ -214,5 +215,113 @@ export async function listTenantListings(tenantId: string) {
     const { sourceRaw: _omit, ...rest } = r;
     void _omit;
     return { ...rest, image: raw.imageUrls?.[0] ?? null };
+  });
+}
+
+// 群（フィルタ）→SQL条件。listingGroup と論理を一致させる。
+function groupCondition(group: ListingGroup) {
+  const st = channelListings.status;
+  const ap = channelListings.coupangApprovalStatus;
+  const sl = channelListings.coupangSalesStatus;
+  switch (group) {
+    case 'draft':
+      return eq(st, 'draft');
+    case 'ready':
+      return eq(st, 'ready');
+    case 'review':
+      return and(eq(st, 'submitted'), or(isNull(ap), eq(ap, 'requested')));
+    case 'selling':
+      return and(eq(st, 'submitted'), inArray(ap, ['approved', 'partial_approved']), or(isNull(sl), eq(sl, 'on_sale')));
+    case 'attention':
+      return or(
+        eq(st, 'error'),
+        and(eq(st, 'submitted'), inArray(ap, ['rejected', 'deleted'])),
+        and(eq(st, 'submitted'), inArray(sl, ['suspended', 'soldout'])),
+      );
+  }
+}
+
+const LIST_COLS = {
+  id: channelListings.id,
+  channel: channelListings.channel,
+  status: channelListings.status,
+  coupangApprovalStatus: channelListings.coupangApprovalStatus,
+  coupangSalesStatus: channelListings.coupangSalesStatus,
+  titleJa: channelListings.titleJa,
+  titleTranslated: channelListings.titleTranslated,
+  listPrice: channelListings.listPrice,
+  listCurrency: channelListings.listCurrency,
+  floorPriceJpy: channelListings.floorPriceJpy,
+  source: sourceProducts.source,
+  sourceProductId: sourceProducts.sourceProductId,
+  sourcePriceJpy: sourceProducts.lastPriceJpy,
+  sourceInStock: sourceProducts.lastInStock,
+  sourceRaw: sourceProducts.raw,
+  batchQuery: ingestBatches.query,
+  batchCapturedAt: ingestBatches.capturedAt,
+  createdAt: channelListings.createdAt,
+} as const;
+
+// 検索＋群フィルタ＋ページング。件数（群別カウント＋総数）も返す。
+export async function queryListings(
+  tenantId: string,
+  opts: { q?: string; group?: ListingGroup | 'all'; page?: number; pageSize?: number },
+) {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
+  const q = (opts.q ?? '').trim();
+  const search = q
+    ? or(
+        ilike(sourceProducts.sourceProductId, `%${q}%`),
+        ilike(channelListings.titleJa, `%${q}%`),
+        ilike(channelListings.titleTranslated, `%${q}%`),
+        ilike(ingestBatches.query, `%${q}%`),
+      )
+    : undefined;
+  const base = and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt), search);
+  const gc = opts.group && opts.group !== 'all' ? groupCondition(opts.group) : undefined;
+  const where = gc ? and(base, gc) : base;
+
+  return withTenant(tenantId, async (tx) => {
+    // 群別カウント（検索条件込み・群フィルタ無し）
+    const countRows = await tx
+      .select({ status: channelListings.status, ap: channelListings.coupangApprovalStatus, sl: channelListings.coupangSalesStatus, n: count() })
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .leftJoin(ingestBatches, eq(channelListings.ingestBatchId, ingestBatches.id))
+      .where(base)
+      .groupBy(channelListings.status, channelListings.coupangApprovalStatus, channelListings.coupangSalesStatus);
+    const counts = { all: 0, draft: 0, ready: 0, review: 0, selling: 0, attention: 0 };
+    for (const r of countRows) {
+      const g = listingGroup({ status: r.status, coupangApprovalStatus: r.ap, coupangSalesStatus: r.sl });
+      counts[g] += Number(r.n);
+      counts.all += Number(r.n);
+    }
+
+    const [tot] = await tx
+      .select({ n: count() })
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .leftJoin(ingestBatches, eq(channelListings.ingestBatchId, ingestBatches.id))
+      .where(where);
+    const total = Number(tot?.n ?? 0);
+
+    const rows = await tx
+      .select(LIST_COLS)
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .leftJoin(ingestBatches, eq(channelListings.ingestBatchId, ingestBatches.id))
+      .where(where)
+      .orderBy(desc(channelListings.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    const items = rows.map((r) => {
+      const raw = (r.sourceRaw ?? {}) as { imageUrls?: string[] };
+      const { sourceRaw: _omit, ...rest } = r;
+      void _omit;
+      return { ...rest, image: raw.imageUrls?.[0] ?? null };
+    });
+
+    return { items, total, counts, page, pageSize };
   });
 }
