@@ -149,7 +149,6 @@ export function ListingsClient() {
       <div className="flex items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold">商品管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">ステータスで絞り込んで、まとめて処理・送信・状態同期できます。</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/products/add"><Button variant="outline" size="sm"><Plus className="h-3.5 w-3.5" />ASIN手動追加</Button></Link>
