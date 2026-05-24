@@ -1,58 +1,15 @@
 import { NextResponse } from 'next/server';
-import { runAsinPipeline } from '@/lib/pipeline';
-import { readAll } from '@/lib/asin-store';
 
-export async function POST(req: Request) {
-  let body: { asin?: string } = {};
-  try {
-    body = await req.json();
-  } catch {
-    /* allow empty */
-  }
-  const asin = body.asin;
-  if (!asin || asin.length !== 10) {
-    return NextResponse.json(
-      { error: 'asin (10 chars) is required' },
-      { status: 400 },
-    );
-  }
+// 【廃止】グローバル共有の dry-run（asin-store依存）。
+// テナント分離のため /api/listings/[id]/dry-run（Cookie認証・自店舗スコープ）に移行。
+export const dynamic = 'force-dynamic';
 
-  // 受信トレイから hint を引く（あれば SP-API モックの精度が上がる）
-  const captured = readAll().find((c) => c.asin === asin);
-  const hint = captured
-    ? {
-        title: captured.title,
-        brand: captured.brand,
-        priceJpy: captured.priceJpy,
-        imageUrl: captured.imageUrl,
-      }
-    : undefined;
-
-  const result = await runAsinPipeline(asin, hint);
-
-  // signedRequest の Authorization ヘッダはマスクしてレスポンスに含める
-  const safeHeaders = { ...result.signedRequest.headers };
-  if (safeHeaders.Authorization) {
-    safeHeaders.Authorization = safeHeaders.Authorization.replace(
-      /access-key=[^,]+/,
-      'access-key=***MASKED***',
-    ).replace(/signature=[a-f0-9]+/, 'signature=***MASKED***');
-  }
-
-  return NextResponse.json({
-    asin: result.asin,
-    steps: result.steps,
-    payload: result.payload,
-    signedRequest: {
-      url: result.signedRequest.url,
-      method: result.signedRequest.method,
-      headers: safeHeaders,
-      bodyBytes: result.signedRequest.body?.length ?? 0,
-      debug: {
-        signedDate: result.signedRequest.debug.signedDate,
-        message: result.signedRequest.debug.message,
-        // signature本体は伏せる
-      },
+export function POST() {
+  return NextResponse.json(
+    {
+      error: 'deprecated',
+      message: 'この dry-run は廃止されました。テナント別の /api/listings/[id]/dry-run を使用してください。',
     },
-  });
+    { status: 410 },
+  );
 }

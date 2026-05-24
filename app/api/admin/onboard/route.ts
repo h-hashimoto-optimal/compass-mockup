@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { tenants, users, invitations } from '@/lib/db/schema';
+import {
+  tenants,
+  users,
+  invitations,
+  tenantSettings,
+  tenantChannelSettings,
+  ngWords,
+} from '@/lib/db/schema';
 import { getSession, generateToken, hashToken } from '@/lib/auth';
+import { STARTER_NG_WORDS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,6 +61,20 @@ export async function POST(req: Request) {
     .insert(tenants)
     .values({ name: tenantName.trim(), slug: slugify(tenantName) })
     .returning();
+
+  // 既定設定・初期データを配布（列defaultを使うため最小値のみ指定）
+  await db.insert(tenantSettings).values({ tenantId: tenant.id });
+  await db.insert(tenantChannelSettings).values({ tenantId: tenant.id, channel: 'coupang' });
+  if (STARTER_NG_WORDS.length) {
+    await db.insert(ngWords).values(
+      STARTER_NG_WORDS.map((w) => ({
+        tenantId: tenant.id,
+        word: w.word,
+        mode: w.mode,
+        replacement: w.replacement ?? null,
+      })),
+    );
+  }
 
   await db.insert(users).values({
     tenantId: tenant.id,

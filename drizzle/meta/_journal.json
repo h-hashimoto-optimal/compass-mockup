@@ -8,6 +8,27 @@
       "when": 1779545113796,
       "tag": "0000_init_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779586972064,
+      "tag": "0001_bored_jack_murdock",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779590441597,
+      "tag": "0002_misty_rogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779593935751,
+      "tag": "0003_flawless_power_pack",
+      "breakpoints": true
     }
   ]
 }

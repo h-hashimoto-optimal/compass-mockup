@@ -1,7 +1,8 @@
 // Compass ASIN Collector — popup
 const STATE_KEY = 'compass:lastCapture';
 const ENDPOINT_KEY = 'compass:endpoint';
-const DEFAULT_ENDPOINT = 'http://localhost:3000/api/asins';
+const TOKEN_KEY = 'compass:token';
+const DEFAULT_ENDPOINT = 'http://localhost:3000/api/ingest';
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,11 +54,20 @@ function escapeHtml(s) {
 
 async function loadEndpoint() {
   const r = await chrome.storage.local.get([ENDPOINT_KEY]);
-  return r[ENDPOINT_KEY] || DEFAULT_ENDPOINT;
+  let ep = r[ENDPOINT_KEY] || DEFAULT_ENDPOINT;
+  // 旧グローバル受信先は廃止 → テナント別 /api/ingest へ自動移行
+  if (ep.includes('/api/asins')) ep = ep.replace('/api/asins', '/api/ingest');
+  return ep;
 }
-
 async function saveEndpoint(v) {
   await chrome.storage.local.set({ [ENDPOINT_KEY]: v });
+}
+async function loadToken() {
+  const r = await chrome.storage.local.get([TOKEN_KEY]);
+  return r[TOKEN_KEY] || '';
+}
+async function saveToken(v) {
+  await chrome.storage.local.set({ [TOKEN_KEY]: v });
 }
 
 async function loadState() {
@@ -72,27 +82,28 @@ async function send() {
     return;
   }
   const endpoint = $('endpoint').value.trim();
+  const token = $('token').value.trim();
   await saveEndpoint(endpoint);
+  await saveToken(token);
+  if (!token) {
+    setStatus('接続トークンを入力してください（Compassの受信トレイで発行）', 'err');
+    return;
+  }
   setStatus(`送信中... ${payload.items.length}件 → ${endpoint}`);
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source: 'amazon-jp',
-        capturedAt: payload.capturedAt,
-        url: payload.url,
-        query: payload.query,
-        items: payload.items,
-      }),
+      headers: { 'Content-Type': 'application/json', 'X-Compass-Token': token },
+      body: JSON.stringify({ source: 'amazon-jp', items: payload.items }),
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 80)}`);
+      const hint = res.status === 401 ? '（トークンが無効です）' : '';
+      throw new Error(`HTTP ${res.status}${hint}: ${text.slice(0, 80)}`);
     }
     const json = await res.json().catch(() => ({}));
     setStatus(
-      `送信完了: 受信 ${json.received ?? payload.items.length}件 / 新規 ${json.added ?? '?'}件`,
+      `送信完了: 受信 ${json.received ?? payload.items.length}件 / 新規 ${json.created ?? '?'}件`,
       'ok',
     );
   } catch (e) {
@@ -135,6 +146,7 @@ async function rescan() {
 
 (async function init() {
   $('endpoint').value = await loadEndpoint();
+  $('token').value = await loadToken();
   render(await loadState());
   $('send').addEventListener('click', send);
   $('copy').addEventListener('click', copyAsins);

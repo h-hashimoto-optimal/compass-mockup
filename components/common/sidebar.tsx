@@ -39,7 +39,7 @@ const items: NavItem[] = [
     icon: ListChecks,
     children: [
       { href: '/listings', label: '出品商品管理', icon: ListChecks },
-      { href: '/publish/J-2026-04-25-0042', label: 'Coupang一括出品', icon: Send },
+      { href: '/publish', label: 'Coupang一括出品', icon: Send },
       { href: '/alerts', label: '在庫・損益監視', icon: Siren },
     ],
   },
