@@ -1,51 +1,17 @@
 // 日→韓 翻訳ラッパ。DEEPL_API_KEY が env にあればDeepL、無ければ簡易マップ＋カナ→ハングル擬似変換。
-//
-// 翻訳後に禁止ワード辞書（ngKeywords）を適用する（busoken準拠：禁止ワード機能）。
-
-import { ngKeywords } from '../mock-data';
+// 禁止ワードの適用はテナント別に lib/data/process.ts 側で行う（ここは純粋な翻訳のみ）。
 
 const HAS_DEEPL = Boolean(process.env.DEEPL_API_KEY);
-
-export type NgApplied = { keyword: string; action: 'block' | 'replace' };
 
 export type TranslationResult = {
   source: 'deepl' | 'mock';
   ja: string;
   ko: string;
-  ngApplied: NgApplied[];
 };
 
-/**
- * 禁止ワード辞書を適用する。
- * - block:   当該語を除去（実環境では出品キューから除外＋アラート）
- * - replace: replaceWith に置換
- * 戻り値の applied で「どの語にヒットしたか」を呼び出し側に伝える。
- */
-export function applyNgWords(
-  text: string,
-  scope: 'title' | 'description',
-): { text: string; applied: NgApplied[] } {
-  let out = text;
-  const applied: NgApplied[] = [];
-  for (const ng of ngKeywords) {
-    if (ng.scope !== 'all' && ng.scope !== scope) continue;
-    if (!out.includes(ng.keyword)) continue;
-    out = out.split(ng.keyword).join(ng.action === 'replace' ? ng.replaceWith ?? '' : '');
-    applied.push({ keyword: ng.keyword, action: ng.action });
-  }
-  out = out.replace(/\s{2,}/g, ' ').trim();
-  return { text: out, applied };
-}
-
 export async function translateJaToKo(ja: string): Promise<TranslationResult> {
-  const rawKo = HAS_DEEPL ? await callDeepl(ja) : mockTranslate(ja);
-  const { text: ko, applied } = applyNgWords(rawKo, 'title');
-  return {
-    source: HAS_DEEPL ? 'deepl' : 'mock',
-    ja,
-    ko,
-    ngApplied: applied,
-  };
+  const ko = HAS_DEEPL ? await callDeepl(ja) : mockTranslate(ja);
+  return { source: HAS_DEEPL ? 'deepl' : 'mock', ja, ko };
 }
 
 async function callDeepl(text: string): Promise<string> {

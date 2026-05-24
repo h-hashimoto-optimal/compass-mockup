@@ -1,9 +1,8 @@
 'use client';
 
-import { Globe, LogOut, Building2, Store } from 'lucide-react';
+import { LogOut, Building2, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRole } from '@/components/common/role-context';
-import { fxRate } from '@/lib/mock-data';
 
 export function Header() {
   const { user, role, signOut } = useRole();
@@ -13,13 +12,6 @@ export function Header() {
       <div className="flex items-center gap-2">
         <RoleIcon className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium">{user.tenantName}</span>
-      </div>
-
-      <div className="ml-4 hidden md:flex items-center gap-2 text-xs text-muted-foreground rounded-md border px-2 py-1">
-        <Globe className="h-3.5 w-3.5" />
-        JPY → KRW
-        <span className="font-semibold text-foreground">{fxRate.rate}</span>
-        <span className="text-muted-foreground">+{fxRate.buffer}%</span>
       </div>
 
       <div className="ml-auto flex items-center gap-2">
