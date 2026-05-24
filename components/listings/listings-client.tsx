@@ -43,7 +43,7 @@ const krw = (n: number | null, c = 'KRW') => (n == null ? '—' : `${n.toLocaleS
 const FILTERS: { key: 'all' | ListingGroup; label: string }[] = [
   { key: 'all', label: 'すべて' },
   { key: 'draft', label: '未処理' },
-  { key: 'ready', label: '送信待ち' },
+  { key: 'ready', label: '出品待ち' },
   { key: 'review', label: '審査中' },
   { key: 'selling', label: '販売中' },
   { key: 'attention', label: '要対応' },

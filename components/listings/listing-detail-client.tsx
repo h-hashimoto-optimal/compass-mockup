@@ -146,7 +146,7 @@ export function ListingDetailClient({ id }: { id: string }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader className="text-sm font-medium">{a.canProcess ? '編集' : '内容（送信済みのため編集不可）'}</CardHeader>
+            <CardHeader className="text-sm font-medium">{a.canProcess ? '編集・出品調整' : '内容（送信済みのため編集不可）'}</CardHeader>
             <CardContent className="space-y-3">
               {!a.canProcess && (
                 <div className="flex items-start gap-2 rounded-md bg-muted/50 text-muted-foreground text-xs p-2">
@@ -160,27 +160,18 @@ export function ListingDetailClient({ id }: { id: string }) {
                 <Field label={`販売価格（${d.listCurrency}）`}><Input value={listPrice} onChange={(e) => setListPrice(e.target.value)} disabled={!a.canProcess} /></Field>
                 <Field label="赤字下限（円）"><Input value={floor} onChange={(e) => setFloor(e.target.value)} disabled={!a.canProcess} /></Field>
               </div>
-              <div className="flex items-center gap-3">
-                {a.canProcess && <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>}
-                {saved && <span className="text-sm text-green-600">保存しました</span>}
-                <Button variant="destructive" size="sm" className="ml-auto" onClick={remove} disabled={!!busy}><Trash2 className="h-4 w-4" />削除</Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="text-sm font-medium">出品調整（この商品だけ）</CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">利益率は空欄＝店舗の既定値。カテゴリは空欄＝自動推定。変更後は「出品準備」で売価/カテゴリに反映されます。</p>
+              <div className="pt-1 text-xs text-muted-foreground">調整（利益率/重量/カテゴリ。空欄＝店舗既定/自動。変更後「出品準備」で反映）</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field label="利益率上書き（%）"><Input value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder="既定" disabled={!a.canProcess} /></Field>
                 <Field label="重量上書き（g）"><Input value={weightG} onChange={(e) => setWeightG(e.target.value)} placeholder={(() => { const w = (d.sourceRaw as { weightG?: number } | null)?.weightG; return w ? `取得 ${w}g` : '取得値'; })()} disabled={!a.canProcess} /></Field>
                 <Field label="カテゴリコード"><Input value={catCode} onChange={(e) => setCatCode(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
                 <Field label="カテゴリ名"><Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
               </div>
-              {a.canProcess && (
-                <Button onClick={save} disabled={!!busy} size="sm" variant="outline"><Save className="h-4 w-4" />保存</Button>
-              )}
+              <div className="flex items-center gap-3">
+                {a.canProcess && <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>}
+                {saved && <span className="text-sm text-green-600">保存しました</span>}
+                <Button variant="destructive" size="sm" className="ml-auto" onClick={remove} disabled={!!busy}><Trash2 className="h-4 w-4" />削除</Button>
+              </div>
             </CardContent>
           </Card>
 

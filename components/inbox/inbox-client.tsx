@@ -101,7 +101,7 @@ export function InboxClient() {
     const ok = (j.results ?? []).filter((x: { ok: boolean }) => x.ok).length;
     setBusy(false);
     setSel(new Set());
-    setDone(`${ok}件を翻訳・価格計算しました（送信待ち）。まだCoupangには送信していません ―送信は「出品管理」/「一括出品」で。`);
+    setDone(`${ok}件を翻訳・価格計算しました（出品待ち）。まだCoupangには出品していません ―出品（送信）は「商品管理」で。`);
     reloadItems();
     loadBatches();
   };

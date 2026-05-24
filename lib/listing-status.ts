@@ -46,7 +46,7 @@ export function listingStatusView(s: ListingStatusInput): StatusView {
     case 'draft':
       return { label: '未処理', tone: 'muted', hint: '受信トレイに入った直後（翻訳・価格計算前）' };
     case 'ready':
-      return { label: '送信待ち', tone: 'info', hint: '翻訳・価格計算済み。まだCoupangに送信していない' };
+      return { label: '出品待ち', tone: 'info', hint: '翻訳・価格計算済み。まだCoupangに出品（送信）していない' };
     case 'error':
       return { label: 'エラー', tone: 'destructive', hint: 'Coupangへの送信に失敗' };
     case 'submitted': {
