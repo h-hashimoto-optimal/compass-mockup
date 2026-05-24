@@ -1,7 +1,7 @@
 // テナント別アラート：赤字(price_up_loss)＝出品単位 / 欠品(out_of_stock)＝仕入元在庫。
 // scanAlerts は冪等：条件成立で open を作成、解消で open を resolved に。
 import { and, eq, desc, isNull, count } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { db, withTenant } from '@/lib/db';
 import { alerts, channelListings, sourceProducts } from '@/lib/db/schema';
 import { getMonitoringSettings } from '@/lib/data/monitoring';
 
@@ -9,7 +9,8 @@ export async function listAlerts(tenantId: string, status?: string) {
   const where = status
     ? and(eq(alerts.tenantId, tenantId), eq(alerts.status, status))
     : eq(alerts.tenantId, tenantId);
-  return db
+  return withTenant(tenantId, (tx) =>
+    tx
     .select({
       id: alerts.id,
       type: alerts.type,
@@ -30,22 +31,25 @@ export async function listAlerts(tenantId: string, status?: string) {
     .leftJoin(channelListings, eq(alerts.channelListingId, channelListings.id))
     .leftJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
     .where(where)
-    .orderBy(desc(alerts.createdAt));
+    .orderBy(desc(alerts.createdAt)),
+  );
 }
 
 // テナントの有効出品を走査し、赤字/欠品を検知（冪等）。
 export async function scanAlerts(tenantId: string) {
-  const rows = await db
-    .select({
-      listingId: channelListings.id,
-      floorPriceJpy: channelListings.floorPriceJpy,
-      sourceRowId: sourceProducts.id,
-      lastPriceJpy: sourceProducts.lastPriceJpy,
-      lastInStock: sourceProducts.lastInStock,
-    })
-    .from(channelListings)
-    .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
-    .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)));
+  const rows = await withTenant(tenantId, (tx) =>
+    tx
+      .select({
+        listingId: channelListings.id,
+        floorPriceJpy: channelListings.floorPriceJpy,
+        sourceRowId: sourceProducts.id,
+        lastPriceJpy: sourceProducts.lastPriceJpy,
+        lastInStock: sourceProducts.lastInStock,
+      })
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt))),
+  );
 
   const openRows = await db
     .select({ id: alerts.id, type: alerts.type, channelListingId: alerts.channelListingId })

@@ -1,7 +1,8 @@
-// Postgres接続（pg Pool）＋Drizzle。DATABASE_URL から接続。
-// 遅延初期化：実際にDBを使うまで接続しない（未設定でもimport時に落ちない）。
-// Next.js dev の HMR で再生成されないよう接続を使い回す。
+// Postgres接続（pg Pool）＋Drizzle。
+// 実行時は APP_DATABASE_URL（最小権限ロール=RLS対象）を優先。無ければ DATABASE_URL（owner=RLS bypass）にフォールバック。
+// 遅延初期化：実際にDBを使うまで接続しない。Next.js dev の HMR で再生成されないよう接続を使い回す。
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
@@ -12,10 +13,10 @@ const g = globalThis as unknown as {
 
 function getDb(): NodePgDatabase<typeof schema> {
   if (!g.__compassDb) {
-    const url = process.env.DATABASE_URL;
+    const url = process.env.APP_DATABASE_URL || process.env.DATABASE_URL;
     if (!url) {
       throw new Error(
-        'DATABASE_URL が未設定です。compass-mockup/.env.local に Neon の接続文字列を設定してください。',
+        'DATABASE_URL（または APP_DATABASE_URL）が未設定です。compass-mockup/.env.local に設定してください。',
       );
     }
     g.__compassPool ??= new Pool({
@@ -37,5 +38,17 @@ export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
     return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(real) : v;
   },
 });
+
+// RLS用：トランザクション内で app.current_tenant をセットし、テナント・スコープでクエリ実行する。
+// RLSポリシーが効くテーブル（channel_listings/orders/tenant_integrations）へのアクセスは必ずこれを通す。
+export async function withTenant<T>(
+  tenantId: string,
+  fn: (tx: NodePgDatabase<typeof schema>) => Promise<T>,
+): Promise<T> {
+  return getDb().transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.current_tenant', ${tenantId}, true)`);
+    return fn(tx as unknown as NodePgDatabase<typeof schema>);
+  });
+}
 
 export { schema };

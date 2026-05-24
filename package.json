@@ -10,7 +10,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node scripts/seed.mjs",
-    "set-secrets-key": "node scripts/set-secrets-key.mjs"
+    "set-secrets-key": "node scripts/set-secrets-key.mjs",
+    "db:app-role": "node scripts/setup-app-role.mjs",
+    "db:rls": "node scripts/apply-rls.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

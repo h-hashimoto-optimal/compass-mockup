@@ -1,7 +1,7 @@
 // 出品パイプライン（mock/dry-run）：仕入元取得→翻訳→価格/floor算出→listingsへ保存。
 // 実キーが無ければ各アダプタはmockを返す（SP-API/DeepL）。まずは Amazon→Coupang のみ。
 import { and, eq, isNull } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { db, withTenant } from '@/lib/db';
 import {
   channelListings,
   sourceProducts,
@@ -26,9 +26,10 @@ async function getFxJpyToKrw(): Promise<number> {
   return r?.jpyToKrw ? num(r.jpyToKrw, DEFAULTS.fxJpyToKrw) : DEFAULTS.fxJpyToKrw;
 }
 
-// テナントの出品1件を処理（mock）。テナント・スコープ＋soft-delete除外。
+// テナントの出品1件を処理（mock）。channel_listings は RLS 対象 → withTenant 経由。
 export async function processListing(tenantId: string, listingId: string) {
-  const [row] = await db
+  return withTenant(tenantId, async (tx) => {
+  const [row] = await tx
     .select({
       id: channelListings.id,
       channel: channelListings.channel,
@@ -56,7 +57,7 @@ export async function processListing(tenantId: string, listingId: string) {
   });
 
   // 2. 仕入元の最新状態を更新（＝外部データのキャッシュ更新）
-  await db
+  await tx
     .update(sourceProducts)
     .set({
       lastPriceJpy: detail.priceJpy ?? null,
@@ -72,12 +73,12 @@ export async function processListing(tenantId: string, listingId: string) {
   const ng = applyNgWords(tr.ko, ngWordList);
 
   // 4. 設定（仕入側＋チャネル側）。無ければ既定値。
-  const [ts] = await db
+  const [ts] = await tx
     .select()
     .from(tenantSettings)
     .where(eq(tenantSettings.tenantId, tenantId))
     .limit(1);
-  const [cs] = await db
+  const [cs] = await tx
     .select()
     .from(tenantChannelSettings)
     .where(
@@ -97,7 +98,7 @@ export async function processListing(tenantId: string, listingId: string) {
   });
 
   // 6. 出品に反映
-  const [updated] = await db
+  const [updated] = await tx
     .update(channelListings)
     .set({
       titleJa: detail.title,
@@ -111,4 +112,5 @@ export async function processListing(tenantId: string, listingId: string) {
     .where(eq(channelListings.id, listingId))
     .returning();
   return updated;
+  });
 }

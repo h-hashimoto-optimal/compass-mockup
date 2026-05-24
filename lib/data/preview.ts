@@ -1,7 +1,7 @@
 // 出品プレビュー＋Coupang dry-run（DB=channel_listings 駆動）。
 // 送信前に「最終形＋必須項目の欠落警告」を可視化し、ペイロード/curlも返す（実送信はしない）。
 import { and, eq, isNull } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { withTenant } from '@/lib/db';
 import { channelListings, sourceProducts } from '@/lib/db/schema';
 import { recommendCategory } from '@/lib/channels/coupang/category-mapper';
 import { buildCoupangPayload } from '@/lib/channels/coupang/schema';
@@ -53,7 +53,8 @@ async function resolveCoupangCtx(tenantId: string) {
 }
 
 export async function previewListing(tenantId: string, listingId: string) {
-  const [row] = await db
+  const [row] = await withTenant(tenantId, (tx) =>
+    tx
     .select({
       id: channelListings.id,
       channel: channelListings.channel,
@@ -80,7 +81,8 @@ export async function previewListing(tenantId: string, listingId: string) {
         isNull(channelListings.deletedAt),
       ),
     )
-    .limit(1);
+    .limit(1),
+  );
   if (!row) throw new Error('NOT_FOUND');
   if (row.channel !== 'coupang') throw new Error('UNSUPPORTED_CHANNEL'); // 他チャネルは後でアダプタ
 

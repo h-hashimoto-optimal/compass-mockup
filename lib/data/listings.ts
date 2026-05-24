@@ -1,7 +1,8 @@
 // テナント・スコープのデータアクセス層（仕入商品→出品）。
-// すべて tenant_id で絞り、soft-delete(deleted_at IS NULL) を強制する＝漏洩・見え漏れ防止。
+// channel_listings は RLS 対象 → withTenant 経由（app.current_tenant をセット）。
+// アプリ層でも tenant_id で絞り、soft-delete(deleted_at IS NULL) を強制する＝二重の漏洩防止。
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { withTenant } from '@/lib/db';
 import { sourceProducts, channelListings } from '@/lib/db/schema';
 import { isBlacklisted } from '@/lib/data/lists';
 
@@ -21,45 +22,47 @@ export async function ingestListing(tenantId: string, input: IngestInput) {
     return { blocked: true as const };
   }
 
-  const [sp] = await db
-    .insert(sourceProducts)
-    .values({
-      source: input.source,
-      sourceProductId: input.sourceProductId,
-      url: input.url ?? null,
-      lastPriceJpy: input.priceJpy ?? null,
-    })
-    .onConflictDoUpdate({
-      target: [sourceProducts.source, sourceProducts.sourceProductId],
-      set: { url: input.url ?? null, lastPriceJpy: input.priceJpy ?? null },
-    })
-    .returning();
+  return withTenant(tenantId, async (tx) => {
+    const [sp] = await tx
+      .insert(sourceProducts)
+      .values({
+        source: input.source,
+        sourceProductId: input.sourceProductId,
+        url: input.url ?? null,
+        lastPriceJpy: input.priceJpy ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [sourceProducts.source, sourceProducts.sourceProductId],
+        set: { url: input.url ?? null, lastPriceJpy: input.priceJpy ?? null },
+      })
+      .returning();
 
-  const existing = await db
-    .select()
-    .from(channelListings)
-    .where(
-      and(
-        eq(channelListings.tenantId, tenantId),
-        eq(channelListings.sourceProductId, sp.id),
-        eq(channelListings.channel, input.channel),
-        isNull(channelListings.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (existing[0]) return { blocked: false as const, listing: existing[0], created: false };
+    const existing = await tx
+      .select()
+      .from(channelListings)
+      .where(
+        and(
+          eq(channelListings.tenantId, tenantId),
+          eq(channelListings.sourceProductId, sp.id),
+          eq(channelListings.channel, input.channel),
+          isNull(channelListings.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (existing[0]) return { blocked: false as const, listing: existing[0], created: false };
 
-  const [listing] = await db
-    .insert(channelListings)
-    .values({
-      tenantId,
-      sourceProductId: sp.id,
-      channel: input.channel,
-      titleJa: input.titleJa ?? null,
-      sourcePriceJpyAtList: input.priceJpy ?? null,
-    })
-    .returning();
-  return { blocked: false as const, listing, created: true };
+    const [listing] = await tx
+      .insert(channelListings)
+      .values({
+        tenantId,
+        sourceProductId: sp.id,
+        channel: input.channel,
+        titleJa: input.titleJa ?? null,
+        sourcePriceJpyAtList: input.priceJpy ?? null,
+      })
+      .returning();
+    return { blocked: false as const, listing, created: true };
+  });
 }
 
 function toIntOrNull(v: unknown): number | null {
@@ -82,92 +85,100 @@ export async function updateListing(
   if ('floorPriceJpy' in fields) set.floorPriceJpy = toIntOrNull(fields.floorPriceJpy);
   if (Object.keys(set).length === 0) return null;
 
-  const [updated] = await db
-    .update(channelListings)
-    .set(set)
-    .where(
-      and(
-        eq(channelListings.id, id),
-        eq(channelListings.tenantId, tenantId),
-        isNull(channelListings.deletedAt),
-      ),
-    )
-    .returning();
-  return updated ?? null;
+  return withTenant(tenantId, async (tx) => {
+    const [updated] = await tx
+      .update(channelListings)
+      .set(set)
+      .where(
+        and(
+          eq(channelListings.id, id),
+          eq(channelListings.tenantId, tenantId),
+          isNull(channelListings.deletedAt),
+        ),
+      )
+      .returning();
+    return updated ?? null;
+  });
 }
 
 // 出品の論理削除（soft-delete）。部分ユニークにより同一仕入を再出品できる。
 export async function softDeleteListing(tenantId: string, id: string) {
-  const [updated] = await db
-    .update(channelListings)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(channelListings.id, id),
-        eq(channelListings.tenantId, tenantId),
-        isNull(channelListings.deletedAt),
-      ),
-    )
-    .returning();
-  return !!updated;
+  return withTenant(tenantId, async (tx) => {
+    const [updated] = await tx
+      .update(channelListings)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(channelListings.id, id),
+          eq(channelListings.tenantId, tenantId),
+          isNull(channelListings.deletedAt),
+        ),
+      )
+      .returning();
+    return !!updated;
+  });
 }
 
 // テナントの出品1件（仕入元情報を結合・soft-delete除外）。他テナント/不存在はnull。
 export async function getTenantListing(tenantId: string, id: string) {
-  const [row] = await db
-    .select({
-      id: channelListings.id,
-      channel: channelListings.channel,
-      status: channelListings.status,
-      titleJa: channelListings.titleJa,
-      titleTranslated: channelListings.titleTranslated,
-      listPrice: channelListings.listPrice,
-      listCurrency: channelListings.listCurrency,
-      floorPriceJpy: channelListings.floorPriceJpy,
-      rejectedReason: channelListings.rejectedReason,
-      source: sourceProducts.source,
-      sourceProductId: sourceProducts.sourceProductId,
-      sourceUrl: sourceProducts.url,
-      sourcePriceJpy: sourceProducts.lastPriceJpy,
-      sourceInStock: sourceProducts.lastInStock,
-      sourceRaw: sourceProducts.raw,
-      sourceCheckedAt: sourceProducts.lastCheckedAt,
-      createdAt: channelListings.createdAt,
-      updatedAt: channelListings.updatedAt,
-    })
-    .from(channelListings)
-    .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
-    .where(
-      and(
-        eq(channelListings.id, id),
-        eq(channelListings.tenantId, tenantId),
-        isNull(channelListings.deletedAt),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
+  return withTenant(tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: channelListings.id,
+        channel: channelListings.channel,
+        status: channelListings.status,
+        titleJa: channelListings.titleJa,
+        titleTranslated: channelListings.titleTranslated,
+        listPrice: channelListings.listPrice,
+        listCurrency: channelListings.listCurrency,
+        floorPriceJpy: channelListings.floorPriceJpy,
+        rejectedReason: channelListings.rejectedReason,
+        source: sourceProducts.source,
+        sourceProductId: sourceProducts.sourceProductId,
+        sourceUrl: sourceProducts.url,
+        sourcePriceJpy: sourceProducts.lastPriceJpy,
+        sourceInStock: sourceProducts.lastInStock,
+        sourceRaw: sourceProducts.raw,
+        sourceCheckedAt: sourceProducts.lastCheckedAt,
+        createdAt: channelListings.createdAt,
+        updatedAt: channelListings.updatedAt,
+      })
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .where(
+        and(
+          eq(channelListings.id, id),
+          eq(channelListings.tenantId, tenantId),
+          isNull(channelListings.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  });
 }
 
 // テナントの出品一覧（仕入元情報を結合・soft-delete除外）
 export async function listTenantListings(tenantId: string) {
-  return db
-    .select({
-      id: channelListings.id,
-      channel: channelListings.channel,
-      status: channelListings.status,
-      titleJa: channelListings.titleJa,
-      titleTranslated: channelListings.titleTranslated,
-      listPrice: channelListings.listPrice,
-      listCurrency: channelListings.listCurrency,
-      floorPriceJpy: channelListings.floorPriceJpy,
-      source: sourceProducts.source,
-      sourceProductId: sourceProducts.sourceProductId,
-      sourcePriceJpy: sourceProducts.lastPriceJpy,
-      sourceInStock: sourceProducts.lastInStock,
-      createdAt: channelListings.createdAt,
-    })
-    .from(channelListings)
-    .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
-    .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)))
-    .orderBy(desc(channelListings.createdAt));
+  return withTenant(tenantId, (tx) =>
+    tx
+      .select({
+        id: channelListings.id,
+        channel: channelListings.channel,
+        status: channelListings.status,
+        titleJa: channelListings.titleJa,
+        titleTranslated: channelListings.titleTranslated,
+        listPrice: channelListings.listPrice,
+        listCurrency: channelListings.listCurrency,
+        floorPriceJpy: channelListings.floorPriceJpy,
+        source: sourceProducts.source,
+        sourceProductId: sourceProducts.sourceProductId,
+        sourcePriceJpy: sourceProducts.lastPriceJpy,
+        sourceInStock: sourceProducts.lastInStock,
+        createdAt: channelListings.createdAt,
+      })
+      .from(channelListings)
+      .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
+      .where(and(eq(channelListings.tenantId, tenantId), isNull(channelListings.deletedAt)))
+      .orderBy(desc(channelListings.createdAt)),
+  );
 }

@@ -1,7 +1,7 @@
 // 単一商品をCoupangへ送る（送信アクション）。
 // 認証情報が無い／本送信未有効化なら dry-run（実送信せず）。鍵が揃い COUPANG_LIVE_SEND=1 のときだけ本送信。
 import { and, eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { withTenant } from '@/lib/db';
 import { channelListings } from '@/lib/db/schema';
 import { signRequest } from '@/lib/channels/coupang/hmac';
 import { getIntegrationSecrets } from '@/lib/data/integrations';
@@ -54,14 +54,16 @@ export async function submitListing(tenantId: string, listingId: string) {
     /* keep */
   }
   const ok = res.ok;
-  await db
-    .update(channelListings)
-    .set({
-      status: ok ? 'pending' : 'error', // 受付＝審査中。却下/エラーは後続の状態同期で更新
-      lastSyncedAt: new Date(),
-      rejectedReason: ok ? null : text.slice(0, 500),
-    })
-    .where(and(eq(channelListings.id, listingId), eq(channelListings.tenantId, tenantId)));
+  await withTenant(tenantId, (tx) =>
+    tx
+      .update(channelListings)
+      .set({
+        status: ok ? 'pending' : 'error', // 受付＝審査中。却下/エラーは後続の状態同期で更新
+        lastSyncedAt: new Date(),
+        rejectedReason: ok ? null : text.slice(0, 500),
+      })
+      .where(and(eq(channelListings.id, listingId), eq(channelListings.tenantId, tenantId))),
+  );
 
   return { mode: 'live' as const, status: res.status, ok, response: json ?? text };
 }
