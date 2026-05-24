@@ -13,7 +13,7 @@ import { fetchAmazonProduct } from '@/lib/channels/amazon/sp-api';
 import { translateJaToKo } from '@/lib/translation/translate';
 import { computeListingPricing } from './pricing';
 import { listNgWords, applyNgWords } from '@/lib/data/lists';
-import { shippingFeeForWeight } from '@/lib/shipping';
+import { resolveShippingFee } from '@/lib/shipping';
 import { DEFAULTS } from '@/lib/constants';
 
 const num = (v: unknown, d: number) => {
@@ -105,7 +105,7 @@ export async function processListing(tenantId: string, listingId: string) {
 
   // 重量(g)＝個別上書き優先→取得値。重量別の国際配送料をテナントの料金表から算出。
   const weightG = row.weightGOverride != null ? row.weightGOverride : detail.weightG ?? null;
-  const intlShippingJpy = shippingFeeForWeight(weightG, (ts?.shippingRatesJson as unknown as []) ?? []);
+  const intlShippingJpy = resolveShippingFee(weightG, (ts?.shippingRatesJson as unknown as []) ?? []);
 
   // 5. 価格＋赤字下限
   const { listPrice, floorPriceJpy } = computeListingPricing(detail.priceJpy ?? 0, {

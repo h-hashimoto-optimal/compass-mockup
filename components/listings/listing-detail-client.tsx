@@ -29,6 +29,11 @@ type Preview = {
   validation: { ready: boolean; warnings: { level: 'block' | 'info'; msg: string }[] };
   payload: unknown;
 };
+type Breakdown = {
+  salePriceKrw: number; listCurrency: string; fxRate: number; sellFeeRatePct: number; feeKrw: number;
+  netRevenueJpy: number; sourcePriceJpy: number; domesticShippingJpy: number; intlShippingJpy: number;
+  weightG: number | null; costJpy: number; profitJpy: number; marginPct: number;
+};
 
 export function ListingDetailClient({ id }: { id: string }) {
   const router = useRouter();
@@ -45,6 +50,7 @@ export function ListingDetailClient({ id }: { id: string }) {
   const [busy, setBusy] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
   const [preview, setPreview] = React.useState<Preview | null>(null);
+  const [breakdown, setBreakdown] = React.useState<Breakdown | null>(null);
 
   const load = React.useCallback(() => {
     fetch('/api/listings/' + id, { cache: 'no-store' }).then(async (r) => {
@@ -61,6 +67,10 @@ export function ListingDetailClient({ id }: { id: string }) {
       setCatCode(x.coupangCategoryCode != null ? String(x.coupangCategoryCode) : '');
       setCatName(x.coupangCategoryName ?? '');
     });
+    fetch('/api/listings/' + id + '/breakdown', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => b && setBreakdown(b))
+      .catch(() => void 0);
   }, [id]);
   React.useEffect(load, [load]);
 
@@ -77,6 +87,26 @@ export function ListingDetailClient({ id }: { id: string }) {
       }),
     });
     setBusy(null); setSaved(true); setTimeout(() => setSaved(false), 2000); load();
+  };
+
+  // 利益率/重量/カテゴリを保存し、売価・赤字下限を再計算（Amazon再取得・翻訳はしない）
+  const recalc = async () => {
+    setBusy('recalc');
+    await fetch('/api/listings/' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titleJa, titleTranslated: titleKo,
+        marginOverride: marginPct.trim() === '' ? null : (Number(marginPct) || 0) / 100,
+        weightGOverride: weightG.trim() === '' ? null : weightG,
+        coupangCategoryCode: catCode.trim() === '' ? null : catCode,
+        coupangCategoryName: catName.trim() === '' ? null : catName,
+      }),
+    });
+    const r = await fetch('/api/listings/' + id + '/recompute', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (j.breakdown) setBreakdown(j.breakdown);
+    setBusy(null);
+    load();
   };
   const act = async (kind: 'process' | 'submit' | 'reconcile') => {
     setBusy(kind);
@@ -169,6 +199,7 @@ export function ListingDetailClient({ id }: { id: string }) {
               </div>
               <div className="flex items-center gap-3">
                 {a.canProcess && <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>}
+                {a.canProcess && <Button variant="outline" onClick={recalc} disabled={!!busy} title="利益率・重量から売価/赤字下限を再計算（翻訳・Amazon再取得はしない）">{busy === 'recalc' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}保存して再計算</Button>}
                 {saved && <span className="text-sm text-green-600">保存しました</span>}
                 <Button variant="destructive" size="sm" className="ml-auto" onClick={remove} disabled={!!busy}><Trash2 className="h-4 w-4" />削除</Button>
               </div>
@@ -209,6 +240,28 @@ export function ListingDetailClient({ id }: { id: string }) {
         </div>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader className="text-sm font-medium">損益内訳（現在の売価ベース）</CardHeader>
+            <CardContent className="text-sm space-y-1.5">
+              {!breakdown ? (
+                <p className="text-xs text-muted-foreground">「出品準備」または「保存して再計算」で算出されます。</p>
+              ) : (
+                <>
+                  <Row k={`販売価格（${breakdown.listCurrency}）`} v={formatKRW(breakdown.salePriceKrw)} bold />
+                  <Row k={`Coupang手数料（${breakdown.sellFeeRatePct}%）`} v={`− ${formatKRW(breakdown.feeKrw)}`} />
+                  <Row k="手取り（円換算）" v={formatJPY(breakdown.netRevenueJpy)} />
+                  <hr className="my-1" />
+                  <Row k="仕入値" v={`− ${formatJPY(breakdown.sourcePriceJpy)}`} />
+                  <Row k="国内送料" v={`− ${formatJPY(breakdown.domesticShippingJpy)}`} />
+                  <Row k={`国際配送料（${breakdown.weightG ? breakdown.weightG + 'g' : '重量不明'}）`} v={`− ${formatJPY(breakdown.intlShippingJpy)}`} />
+                  <hr className="my-1" />
+                  <Row k="利益（粗利）" v={formatJPY(breakdown.profitJpy)} bold />
+                  <Row k="利益率" v={`${breakdown.marginPct}%`} />
+                  {breakdown.profitJpy < 0 && <div className="flex items-center gap-1 text-xs text-destructive mt-1"><AlertTriangle className="h-3.5 w-3.5" />現在の売価/仕入では赤字</div>}
+                </>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="text-sm font-medium">価格</CardHeader>
             <CardContent className="text-sm space-y-1.5">

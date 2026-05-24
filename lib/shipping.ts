@@ -21,10 +21,19 @@ export function normalizeTiers(raw: unknown): ShippingTier[] {
   return tiers.length ? tiers : DEFAULT_SHIPPING_TIERS;
 }
 
+// 重量が取得できていないときの既定配送料（円）。一律でこの額を見込む。
+export const UNKNOWN_WEIGHT_FEE_JPY = 1000;
+
 // 重量(g)→配送料(円)。該当帯（weight<=maxG の最小帯）。超過は最上位帯の料金。
 export function shippingFeeForWeight(weightG: number | null | undefined, tiers: ShippingTier[]): number {
   if (!weightG || weightG <= 0) return 0;
   const sorted = normalizeTiers(tiers);
   for (const t of sorted) if (weightG <= t.maxG) return t.feeJpy;
   return sorted[sorted.length - 1]?.feeJpy ?? 0;
+}
+
+// 重量不明なら一律 UNKNOWN_WEIGHT_FEE_JPY、判明していれば帯料金。
+export function resolveShippingFee(weightG: number | null | undefined, tiers: ShippingTier[]): number {
+  if (!weightG || weightG <= 0) return UNKNOWN_WEIGHT_FEE_JPY;
+  return shippingFeeForWeight(weightG, tiers);
 }
