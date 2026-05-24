@@ -51,6 +51,7 @@ export function ListingDetailClient({ id }: { id: string }) {
   const [saved, setSaved] = React.useState(false);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [breakdown, setBreakdown] = React.useState<Breakdown | null>(null);
+  const [defMarginPct, setDefMarginPct] = React.useState('25');
 
   const load = React.useCallback(() => {
     fetch('/api/listings/' + id, { cache: 'no-store' }).then(async (r) => {
@@ -70,6 +71,10 @@ export function ListingDetailClient({ id }: { id: string }) {
     fetch('/api/listings/' + id + '/breakdown', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((b) => b && setBreakdown(b))
+      .catch(() => void 0);
+    fetch('/api/tenant/settings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { const m = Number(j.settings?.marginRate); if (Number.isFinite(m)) setDefMarginPct(String(Math.round(m * 1000) / 10)); })
       .catch(() => void 0);
   }, [id]);
   React.useEffect(load, [load]);
@@ -131,6 +136,7 @@ export function ListingDetailClient({ id }: { id: string }) {
 
   const st = listingStatusView(d);
   const a = listingActions(d);
+  const fetchedWeight = (d.sourceRaw as { weightG?: number } | null)?.weightG ?? null;
   const loss = d.floorPriceJpy != null && d.sourcePriceJpy != null && d.sourcePriceJpy > d.floorPriceJpy;
 
   return (
@@ -190,12 +196,16 @@ export function ListingDetailClient({ id }: { id: string }) {
                 <Field label={`販売価格（${d.listCurrency}）`}><Input value={listPrice} onChange={(e) => setListPrice(e.target.value)} disabled={!a.canProcess} /></Field>
                 <Field label="赤字下限（円）"><Input value={floor} onChange={(e) => setFloor(e.target.value)} disabled={!a.canProcess} /></Field>
               </div>
-              <div className="pt-1 text-xs text-muted-foreground">調整（利益率/重量/カテゴリ。空欄＝店舗既定/自動。変更後「出品準備」で反映）</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Field label="利益率上書き（%）"><Input value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder="既定" disabled={!a.canProcess} /></Field>
-                <Field label="重量上書き（g）"><Input value={weightG} onChange={(e) => setWeightG(e.target.value)} placeholder={(() => { const w = (d.sourceRaw as { weightG?: number } | null)?.weightG; return w ? `取得 ${w}g` : '取得値'; })()} disabled={!a.canProcess} /></Field>
-                <Field label="カテゴリコード"><Input value={catCode} onChange={(e) => setCatCode(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
-                <Field label="カテゴリ名"><Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="自動推定" disabled={!a.canProcess} /></Field>
+              <div className="pt-1 text-xs text-muted-foreground">調整（空欄なら既定値を使用。変更後「保存して再計算」で売価/赤字下限に反映）</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="利益率（%）">
+                  <Input value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder={`既定 ${defMarginPct}%`} disabled={!a.canProcess} />
+                  <p className="text-[11px] text-muted-foreground mt-1">店舗既定 {defMarginPct}%（空欄でこの値）</p>
+                </Field>
+                <Field label="重量（g）">
+                  <Input value={weightG} onChange={(e) => setWeightG(e.target.value)} placeholder={fetchedWeight ? `取得 ${fetchedWeight}g` : '取得値'} disabled={!a.canProcess} />
+                  <p className="text-[11px] text-muted-foreground mt-1">取得 {fetchedWeight ? `${fetchedWeight}g` : '不明（配送料1,000円で計算）'}（空欄でこの値）</p>
+                </Field>
               </div>
               <div className="flex items-center gap-3">
                 {a.canProcess && <Button onClick={save} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'save' ? '保存中…' : '保存'}</Button>}
