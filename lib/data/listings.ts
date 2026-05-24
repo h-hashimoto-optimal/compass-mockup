@@ -13,6 +13,8 @@ export type IngestInput = {
   url?: string | null;
   titleJa?: string | null;
   priceJpy?: number | null;
+  brand?: string | null; // 拡張がスクレイプした実ブランド
+  imageUrl?: string | null; // 拡張がスクレイプした実メイン画像
 };
 
 // 仕入元商品を upsert（全社共通・重複排除）し、テナントの出品(draft)を作る/既存を返す。
@@ -22,6 +24,12 @@ export async function ingestListing(tenantId: string, input: IngestInput) {
     return { blocked: true as const };
   }
 
+  // 拡張がスクレイプした実ブランド/画像を raw に退避（処理時の hint として使い、実データを維持）
+  const scraped =
+    input.brand || input.imageUrl
+      ? { brand: input.brand ?? null, imageUrls: input.imageUrl ? [input.imageUrl] : [], scraped: true }
+      : null;
+
   return withTenant(tenantId, async (tx) => {
     const [sp] = await tx
       .insert(sourceProducts)
@@ -30,10 +38,15 @@ export async function ingestListing(tenantId: string, input: IngestInput) {
         sourceProductId: input.sourceProductId,
         url: input.url ?? null,
         lastPriceJpy: input.priceJpy ?? null,
+        ...(scraped ? { raw: scraped } : {}),
       })
       .onConflictDoUpdate({
         target: [sourceProducts.source, sourceProducts.sourceProductId],
-        set: { url: input.url ?? null, lastPriceJpy: input.priceJpy ?? null },
+        set: {
+          url: input.url ?? null,
+          lastPriceJpy: input.priceJpy ?? null,
+          ...(scraped ? { raw: scraped } : {}),
+        },
       })
       .returning();
 

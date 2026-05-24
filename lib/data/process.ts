@@ -37,6 +37,8 @@ export async function processListing(tenantId: string, listingId: string) {
       sourceRowId: sourceProducts.id,
       source: sourceProducts.source,
       sourceProductId: sourceProducts.sourceProductId,
+      sourcePriceJpy: sourceProducts.lastPriceJpy,
+      sourceRaw: sourceProducts.raw,
     })
     .from(channelListings)
     .innerJoin(sourceProducts, eq(channelListings.sourceProductId, sourceProducts.id))
@@ -50,10 +52,15 @@ export async function processListing(tenantId: string, listingId: string) {
     .limit(1);
   if (!row) throw new Error('NOT_FOUND');
 
-  // 1. 仕入元から取得（ソース別アダプタ。今はamazonのみ）
+  // 1. 仕入元から取得（ソース別アダプタ。今はamazonのみ）。
+  //    拡張がスクレイプ済みの実データ（価格/画像/ブランド）をhintで渡し、mockでも実値を維持する。
   if (row.source !== 'amazon') throw new Error('UNSUPPORTED_SOURCE');
+  const scraped = (row.sourceRaw ?? {}) as { brand?: string | null; imageUrls?: string[] };
   const detail = await fetchAmazonProduct(row.sourceProductId, {
     title: row.titleJa ?? undefined,
+    priceJpy: row.sourcePriceJpy ?? undefined,
+    brand: scraped.brand ?? undefined,
+    imageUrl: scraped.imageUrls?.[0],
   });
 
   // 2. 仕入元の最新状態を更新（＝外部データのキャッシュ更新）

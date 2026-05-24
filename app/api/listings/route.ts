@@ -43,6 +43,8 @@ export async function POST(req: Request) {
     url: body.url ? String(body.url) : null,
     titleJa: body.titleJa ? String(body.titleJa) : null,
     priceJpy: toInt(body.priceJpy),
+    brand: body.brand ? String(body.brand) : null,
+    imageUrl: body.imageUrl ? String(body.imageUrl) : null,
   });
   if (res.blocked) {
     return NextResponse.json(

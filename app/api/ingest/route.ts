@@ -51,6 +51,8 @@ export async function POST(req: Request) {
       url: it.url ? String(it.url) : null,
       titleJa: it.title ? String(it.title) : it.titleJa ? String(it.titleJa) : null,
       priceJpy: toInt(it.priceJpy ?? it.price),
+      brand: it.brand ? String(it.brand) : null,
+      imageUrl: it.imageUrl ? String(it.imageUrl) : it.image ? String(it.image) : null,
     });
     if (r.blocked) {
       blocked++;
