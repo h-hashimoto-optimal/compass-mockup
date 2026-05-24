@@ -51,7 +51,9 @@ export function AsinAddClient() {
     const j2 = await r2.json().catch(() => ({}));
     setPhase('idle');
     if (!r2.ok) {
-      setMsg('取得・翻訳に失敗しました（商品管理に「未処理」で残っています）');
+      // 商品情報が取得できなければ登録しない（中途半端なdraftを残さない）
+      await fetch('/api/listings/' + id, { method: 'DELETE' });
+      setMsg('商品情報を取得できませんでした。ASINをご確認ください（登録していません）。');
       return;
     }
     const l = j2.listing ?? {};
