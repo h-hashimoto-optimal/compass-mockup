@@ -12,7 +12,8 @@
     "db:seed": "node scripts/seed.mjs",
     "set-secrets-key": "node scripts/set-secrets-key.mjs",
     "db:app-role": "node scripts/setup-app-role.mjs",
-    "db:rls": "node scripts/apply-rls.mjs"
+    "db:rls": "node scripts/apply-rls.mjs",
+    "worker": "node scripts/worker.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1093.0",
