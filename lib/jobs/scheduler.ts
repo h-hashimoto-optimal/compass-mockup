@@ -27,6 +27,11 @@ export async function enqueueDue(): Promise<{ enqueued: number }> {
     await enqueue('crawl_source', { payload: { limit: 100 } });
     n++;
   }
+  // 為替日次（全社共通・1本）
+  if (!(await hasPending('fetch_fx'))) {
+    await enqueue('fetch_fx');
+    n++;
+  }
   // ②③ テナントごとに scan_alerts / sync_orders
   const active = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.status, 'active'));
   for (const t of active) {
@@ -48,6 +53,14 @@ export async function enqueueDue(): Promise<{ enqueued: number }> {
     }
     if (!(await hasPending('sync_returns', t.id))) {
       await enqueue('sync_returns', { tenantId: t.id });
+      n++;
+    }
+    if (!(await hasPending('reconcile_status', t.id))) {
+      await enqueue('reconcile_status', { tenantId: t.id });
+      n++;
+    }
+    if (!(await hasPending('notify', t.id))) {
+      await enqueue('notify', { tenantId: t.id });
       n++;
     }
   }

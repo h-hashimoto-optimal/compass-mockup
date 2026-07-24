@@ -9,7 +9,10 @@ export type JobType =
   | 'sync_orders'
   | 'auto_stop'
   | 'sync_cs'
-  | 'sync_returns';
+  | 'sync_returns'
+  | 'reconcile_status'
+  | 'fetch_fx'
+  | 'notify';
 
 export type ClaimedJob = {
   id: number;

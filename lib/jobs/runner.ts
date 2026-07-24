@@ -6,6 +6,9 @@ import { syncTenantOrders } from '@/lib/data/order-sync';
 import { autoStopTenant } from '@/lib/data/auto-stop';
 import { syncTenantCs } from '@/lib/data/cs-sync';
 import { syncTenantReturns } from '@/lib/data/return-sync';
+import { reconcileTenant } from '@/lib/data/reconcile';
+import { fetchAndStoreFx } from '@/lib/data/fx';
+import { notifyTenant } from '@/lib/data/notify';
 
 type Handler = (job: ClaimedJob) => Promise<void>;
 
@@ -39,6 +42,20 @@ const HANDLERS: Record<string, Handler> = {
   sync_returns: async (job) => {
     if (!job.tenantId) throw new Error('sync_returns: tenantId 必須');
     await syncTenantReturns(job.tenantId);
+  },
+  // Coupang承認/販売ステータスの取込（既存reconcileをジョブ化）
+  reconcile_status: async (job) => {
+    if (!job.tenantId) throw new Error('reconcile_status: tenantId 必須');
+    await reconcileTenant(job.tenantId);
+  },
+  // 為替(JPY→KRW)日次取得（全社共通）
+  fetch_fx: async () => {
+    await fetchAndStoreFx();
+  },
+  // 未通知アラートを加盟者にメール配信（アプリ内センターは alerts をそのまま参照）
+  notify: async (job) => {
+    if (!job.tenantId) throw new Error('notify: tenantId 必須');
+    await notifyTenant(job.tenantId);
   },
 };
 
