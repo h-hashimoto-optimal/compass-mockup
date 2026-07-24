@@ -1,11 +1,19 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+
+const ERROR_MESSAGES: Record<string, string> = {
+  not_invited: 'このGoogleアカウントは招待されていません。本部にご確認ください。',
+  account_mismatch: '別のGoogleアカウントで登録済みです。',
+  unverified: 'Googleのメールアドレスが確認済みではありません。',
+  state: 'セッションの検証に失敗しました。もう一度お試しください。',
+  oauth: 'ログインに失敗しました。もう一度お試しください。',
+  google: 'Google認証に失敗しました。もう一度お試しください。',
+};
 
 export default function LoginPage() {
   return (
@@ -16,34 +24,10 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get('next') || '/';
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [show, setShow] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, next }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'ログインに失敗しました');
-      router.push(json.redirect);
-      router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
-  };
+  const error = sp.get('error');
+  const href = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
 
   return (
     <main className="min-h-screen grid place-items-center bg-muted/40 p-4">
@@ -59,52 +43,23 @@ function LoginForm() {
           <p className="text-xs text-muted-foreground">韓国越境EC自動化ツール</p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground">メールアドレス</label>
-              <Input
-                type="email"
-                className="mt-1"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
+          {error && (
+            <div className="text-xs text-destructive mb-3 text-center">
+              {ERROR_MESSAGES[error] ?? 'ログインに失敗しました。'}
             </div>
-
-            <div>
-              <label className="text-xs text-muted-foreground">パスワード</label>
-              <div className="relative mt-1">
-                <Input
-                  type={show ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow((s) => !s)}
-                  className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                  aria-label="パスワード表示切替"
-                >
-                  {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            {error && <div className="text-xs text-destructive">{error}</div>}
-
-            <Button type="submit" className="w-full" disabled={busy}>
-              <LogIn className="h-4 w-4" />
-              {busy ? 'ログイン中...' : 'ログイン'}
-            </Button>
-
-            <p className="text-[11px] text-muted-foreground text-center">
-              アカウントは本部からの招待制です。招待メールのリンクから初回パスワードを設定してください。
-            </p>
-          </form>
+          )}
+          <Button
+            className="w-full"
+            onClick={() => {
+              window.location.href = href;
+            }}
+          >
+            <LogIn className="h-4 w-4" />
+            Googleでログイン
+          </Button>
+          <p className="text-[11px] text-muted-foreground text-center mt-4">
+            アカウントは本部からの招待制です。招待されたGoogleアカウントでログインしてください。
+          </p>
         </CardContent>
       </Card>
     </main>

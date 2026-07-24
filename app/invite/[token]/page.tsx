@@ -3,12 +3,12 @@ import { db } from '@/lib/db';
 import { invitations, tenants } from '@/lib/db/schema';
 import { hashToken } from '@/lib/auth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { AcceptForm } from '@/components/invite/accept-form';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default async function InvitePage({ params }: { params: { token: string } }) {
+export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   const rows = await db
     .select({
       email: invitations.email,
@@ -18,7 +18,7 @@ export default async function InvitePage({ params }: { params: { token: string }
     })
     .from(invitations)
     .leftJoin(tenants, eq(invitations.tenantId, tenants.id))
-    .where(eq(invitations.tokenHash, hashToken(params.token)))
+    .where(eq(invitations.tokenHash, hashToken(token)))
     .limit(1);
 
   const inv = rows[0];
@@ -45,7 +45,18 @@ export default async function InvitePage({ params }: { params: { token: string }
               </p>
             </div>
           ) : (
-            <AcceptForm token={params.token} email={inv.email} tenantName={inv.tenantName ?? ''} />
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{inv.tenantName ?? ''}</span> への招待です。招待された
+                Googleアカウント（<span className="font-medium">{inv.email}</span>）でログインしてください。
+              </p>
+              <a
+                href="/api/auth/google/start"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground h-10 text-sm font-medium hover:opacity-90"
+              >
+                Googleでログインして参加
+              </a>
+            </div>
           )}
         </CardContent>
       </Card>

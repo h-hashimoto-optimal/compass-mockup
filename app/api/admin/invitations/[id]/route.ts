@@ -13,11 +13,11 @@ async function requireOwner() {
 }
 
 // 招待の再送（リンク再発行：新トークン＋期限7日）。本部のみ。
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireOwner())) {
     return NextResponse.json({ error: '権限がありません（本部のみ）' }, { status: 403 });
   }
-  const [inv] = await db.select().from(invitations).where(eq(invitations.id, params.id)).limit(1);
+  const [inv] = await db.select().from(invitations).where(eq(invitations.id, (await params).id)).limit(1);
   if (!inv) return NextResponse.json({ error: '招待が見つかりません' }, { status: 404 });
   if (inv.acceptedAt) return NextResponse.json({ error: '受諾済みの招待です' }, { status: 400 });
 
@@ -32,11 +32,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 }
 
 // 招待の取消（招待と、未受諾の招待ユーザーを削除）。本部のみ。
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireOwner())) {
     return NextResponse.json({ error: '権限がありません（本部のみ）' }, { status: 403 });
   }
-  const [inv] = await db.select().from(invitations).where(eq(invitations.id, params.id)).limit(1);
+  const [inv] = await db.select().from(invitations).where(eq(invitations.id, (await params).id)).limit(1);
   if (!inv) return NextResponse.json({ error: '招待が見つかりません' }, { status: 404 });
   if (inv.acceptedAt) return NextResponse.json({ error: '受諾済みは取消できません' }, { status: 400 });
 

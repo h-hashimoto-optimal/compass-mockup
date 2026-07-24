@@ -1,9 +1,9 @@
 // 本部(owner)アカウントを初期投入する。冪等：既に存在すればスキップ。
+// パスワードは廃止（Googleログイン）。owner は OWNER_EMAIL で作成し、初回Googleログインで google_sub を紐付ける。
 // 使い方: node scripts/seed.mjs   （.env.local の DATABASE_URL / OWNER_* を読む）
 import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
-import bcrypt from 'bcryptjs';
 
 function loadEnvLocal() {
   const p = path.join(process.cwd(), '.env.local');
@@ -21,14 +21,9 @@ loadEnvLocal();
 const url = process.env.DATABASE_URL;
 const email = (process.env.OWNER_EMAIL || 'hirohohashimoto@gmail.com').trim().toLowerCase();
 const name = process.env.OWNER_NAME || '橋本';
-const password = process.env.OWNER_INITIAL_PASSWORD;
 
 if (!url) {
   console.error('✗ DATABASE_URL が未設定です（.env.local）。');
-  process.exit(1);
-}
-if (!password) {
-  console.error('✗ OWNER_INITIAL_PASSWORD が未設定です（.env.local）。本部の初期パスワードを入れてください。');
   process.exit(1);
 }
 
@@ -42,13 +37,12 @@ try {
   if (exists.rowCount > 0) {
     console.log(`= 既に存在: ${email}（スキップ）`);
   } else {
-    const hash = await bcrypt.hash(password, 10);
     await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, role, status)
-       VALUES ($1, $2, $3, 'owner', 'active')`,
-      [email, hash, name],
+      `INSERT INTO users (email, full_name, role, status)
+       VALUES ($1, $2, 'owner', 'active')`,
+      [email, name],
     );
-    console.log(`✓ 本部アカウント作成: ${email} / ${name}`);
+    console.log(`✓ 本部アカウント作成: ${email} / ${name}（初回Googleログインで有効化）`);
   }
 } catch (e) {
   console.error('✗ seed失敗:', e.message);

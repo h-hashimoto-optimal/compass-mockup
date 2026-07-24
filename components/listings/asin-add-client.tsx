@@ -6,6 +6,7 @@ import { Plus, ArrowLeft, Loader2, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { amazonFetchErrorMessage } from '@/lib/errors';
 
 type Result = { id: string; titleJa: string | null; titleKo: string | null; listPrice: number | null; listCurrency: string };
 
@@ -53,7 +54,7 @@ export function AsinAddClient() {
     if (!r2.ok) {
       // 商品情報が取得できなければ登録しない（中途半端なdraftを残さない）
       await fetch('/api/listings/' + id, { method: 'DELETE' });
-      setMsg('商品情報を取得できませんでした。ASINをご確認ください（登録していません）。');
+      setMsg(amazonFetchErrorMessage(j2.error) + '（登録していません）');
       return;
     }
     const l = j2.listing ?? {};
@@ -83,6 +84,9 @@ export function AsinAddClient() {
               {msg && <span className="text-sm text-primary">{msg}</span>}
             </div>
           </form>
+          <p className="mt-3 text-[11px] text-muted-foreground border-t pt-2">
+            ※デモ：ASINに <code>NOTFOUND</code> / <code>AUTHFAIL</code> / <code>RATELIMIT</code> / <code>FAIL</code> を含めると、取得失敗時の挙動（原因別メッセージ＋自動ロールバック）を確認できます（鍵未設定のmock時のみ）。
+          </p>
         </CardContent>
       </Card>
 

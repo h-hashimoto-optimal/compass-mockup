@@ -42,15 +42,16 @@ npm run db:seed      # 本部(owner)初期投入（.env.localのOWNER_*）
 
 ## シークレット
 
-- `.env.local`（gitignore済み）にのみ実値。**チャット・コミット・ログに出さない**。
-- 必要キー: `DATABASE_URL` / `SESSION_SECRET` / `SECRETS_MASTER_KEY` / `OWNER_EMAIL` / `OWNER_NAME` / `OWNER_INITIAL_PASSWORD`（テンプレは `.env.example`）。
+- **local のみ** `.env.local`（gitignore済み）に実値。**チャット・コミット・ログに出さない**。
+- **STG/PROD は AWS Secrets Manager を正とし、起動時（`instrumentation.ts`）に取得**（env に実値を置かない）。env はサプライチェーン攻撃（汚染された依存 npm が `process.env` を外部送信）の標的になりやすいため。env 経由は Secrets Manager が使えない場合の**次善策**。
+- 必要キー: `DATABASE_URL` / `APP_DATABASE_URL` / `SESSION_SECRET` / `SECRETS_MASTER_KEY` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `AWS_REGION` / `COMPASS_SECRETS_ID` / `OWNER_EMAIL` / `OWNER_NAME`（テンプレは `.env.example`）。※Googleログイン移行に伴い `OWNER_INITIAL_PASSWORD` は廃止。
 
 ## 連携シークレットの暗号化（SECRETS_MASTER_KEY）
 
-- 加盟店が登録する Amazon SP-API / Coupang のAPI鍵は **AES-256-GCM で暗号化**して `tenant_integrations.secrets_enc` に保存（平文保存しない）。鍵は env `SECRETS_MASTER_KEY`（base64 32byte）。
-- 生成: `npm run set-secrets-key`（`.env.local` に未設定なら自動生成。値は表示しない）。**STG/PROD はデプロイ先の環境変数に別値を設定**。
-- ⚠️ **運用開始後に鍵を変えると既存の暗号化データが復号不能**。回転する場合は「新鍵で全 `secrets_enc` を再暗号化（旧鍵で復号→新鍵で暗号化）」のマイグレーションが必須。
-- ⚠️ 鍵が漏れると全テナントの連携鍵が漏れる。env管理・アクセス制限・定期ローテーション（再暗号化込み）を前提にする。
+- 加盟店が登録する Amazon SP-API / Coupang のAPI鍵は **AES-256-GCM で暗号化**して `tenant_integrations.secrets_enc` に保存（平文保存しない）。マスター鍵は base64 32byte。
+- **鍵の入手元**: STG/PROD は **AWS Secrets Manager から起動時に取得**（`instrumentation.ts` で一度だけ読み、`lib/crypto.ts` は同期のまま使う）。local のみ `SECRETS_MASTER_KEY` を `.env.local` に置く。生成: `npm run set-secrets-key`（未設定なら自動生成・値は表示しない）。
+- ⚠️ **運用開始後に鍵を変えると既存の暗号化データが復号不能**。回すなら「新鍵で全 `secrets_enc` を再暗号化（旧鍵で復号→新鍵で暗号化）」のマイグレーションが必須。
+- 鍵は Secrets Manager でアクセス制限・監査する。**定期ローテーションは任意**（漏洩時は上記の再暗号化で緊急ローテーション）。
 - クライアントへシークレット値は返さない（連携状態＝設定済みフィールド名と更新日時のみ）。書き込み専用フォーム。
 
 ## RLS（Row-Level Security）＝多層防御

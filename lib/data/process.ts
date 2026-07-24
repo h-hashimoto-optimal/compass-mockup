@@ -9,7 +9,8 @@ import {
   tenantChannelSettings,
   fxRates,
 } from '@/lib/db/schema';
-import { fetchAmazonProduct } from '@/lib/channels/amazon/sp-api';
+import { fetchAmazonProduct, type SpApiCreds } from '@/lib/channels/amazon/sp-api';
+import { getIntegrationSecrets } from '@/lib/data/integrations';
 import { translateJaToKo } from '@/lib/translation/translate';
 import { computeListingPricing } from './pricing';
 import { listNgWords, applyNgWords } from '@/lib/data/lists';
@@ -29,6 +30,8 @@ async function getFxJpyToKrw(): Promise<number> {
 
 // テナントの出品1件を処理（mock）。channel_listings は RLS 対象 → withTenant 経由。
 export async function processListing(tenantId: string, listingId: string) {
+  // テナント自身の SP-API 鍵（あれば本番取得、無ければmock）。withTenant外で復号取得。
+  const amzCreds = await getIntegrationSecrets<SpApiCreds>(tenantId, 'amazon_spapi');
   return withTenant(tenantId, async (tx) => {
   const [row] = await tx
     .select({
@@ -65,12 +68,16 @@ export async function processListing(tenantId: string, listingId: string) {
   //    拡張がスクレイプ済みの実データ（価格/画像/ブランド）をhintで渡し、mockでも実値を維持する。
   if (row.source !== 'amazon') throw new Error('UNSUPPORTED_SOURCE');
   const scraped = (row.sourceRaw ?? {}) as { brand?: string | null; imageUrls?: string[] };
-  const detail = await fetchAmazonProduct(row.sourceProductId, {
-    title: row.titleJa ?? undefined,
-    priceJpy: row.sourcePriceJpy ?? undefined,
-    brand: scraped.brand ?? undefined,
-    imageUrl: scraped.imageUrls?.[0],
-  });
+  const detail = await fetchAmazonProduct(
+    row.sourceProductId,
+    {
+      title: row.titleJa ?? undefined,
+      priceJpy: row.sourcePriceJpy ?? undefined,
+      brand: scraped.brand ?? undefined,
+      imageUrl: scraped.imageUrls?.[0],
+    },
+    amzCreds, // SP-API鍵があれば本番取得（失敗時はthrow→処理失敗）
+  );
 
   // 2. 仕入元の最新状態を更新（＝外部データのキャッシュ更新）
   await tx

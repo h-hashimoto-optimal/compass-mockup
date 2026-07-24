@@ -41,6 +41,15 @@
     return location.search.includes('k=') ? 'search' : 'unknown';
   }
 
+  // スポンサー(広告)枠かどうか
+  function isSponsored(el) {
+    if (el.querySelector('[data-component-type="sp-sponsored-result"]')) return true;
+    const lbl = el.querySelector(
+      '.puis-sponsored-label-text, .s-sponsored-label-text, .a-color-secondary .s-label-popover-default',
+    );
+    return !!lbl && /スポンサー|sponsored/i.test(lbl.textContent || '');
+  }
+
   // ---- 検索結果ページ -------------------------------------------------------
   function extractFromSearch() {
     const nodes = document.querySelectorAll('[data-asin]');
@@ -49,6 +58,7 @@
     nodes.forEach((el) => {
       const asin = el.getAttribute('data-asin');
       if (!asin || !ASIN_RE.test(asin) || seen.has(asin)) return;
+      if (isSponsored(el)) return; // スポンサー(広告)枠は除外
       seen.add(asin);
 
       // Amazon検索結果はDOMバリアントが多いので複数セレクタ→属性の順でfallback
@@ -76,8 +86,12 @@
       const imgEl = el.querySelector('img.s-image, img');
       const imageUrl = imgEl ? imgEl.src : '';
 
-      const brandEl = el.querySelector('h2 .a-size-base-plus, h5 .a-size-base-plus');
-      const brand = brandEl ? brandEl.textContent.trim() : '';
+      const brand = pickTextIn(el, [
+        '.a-row .a-size-base-plus.a-color-base',
+        'h2 .a-size-base-plus',
+        'h5 .a-size-base-plus',
+        '[data-cy="title-recipe"] .a-size-base-plus',
+      ]);
 
       items.push({
         asin,
@@ -193,14 +207,26 @@
 
   function capture() {
     const items = MODE === 'product' ? extractFromProduct() : extractFromSearch();
-    const payload = {
-      capturedAt: new Date().toISOString(),
-      url: location.href,
-      query: MODE === 'product' ? '' : getQuery(),
-      items,
-    };
-    chrome.storage.local.set({ [STATE_KEY]: payload });
-    renderBadge(items.length);
+    const query = MODE === 'product' ? '' : getQuery();
+    // 検索モードは「同一クエリなら次ページに移っても蓄積」。Amazon検索は番号ページャー
+    // （無限スクロールではない）なので、ページを送るたびにASINを貯めていく。
+    chrome.storage.local.get([STATE_KEY], (r) => {
+      const prev = r[STATE_KEY];
+      let merged = items;
+      if (MODE !== 'product' && prev && prev.query === query && Array.isArray(prev.items)) {
+        const byAsin = new Map(prev.items.map((it) => [it.asin, it]));
+        for (const it of items) if (!byAsin.has(it.asin)) byAsin.set(it.asin, it);
+        merged = Array.from(byAsin.values());
+      }
+      const payload = {
+        capturedAt: new Date().toISOString(),
+        url: location.href,
+        query,
+        items: merged,
+      };
+      chrome.storage.local.set({ [STATE_KEY]: payload });
+      renderBadge(merged.length);
+    });
   }
 
   capture();

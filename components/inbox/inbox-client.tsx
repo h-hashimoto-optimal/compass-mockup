@@ -18,6 +18,7 @@ type Batch = {
   total: number;
   drafts: number;
   advanced: number;
+  selling: number;
 };
 type Item = {
   id: string;
@@ -48,7 +49,9 @@ export function InboxClient() {
   const [tokens, setTokens] = React.useState<{ id: string }[]>([]);
   const [newToken, setNewToken] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // マウント後に設定（SSRと初期描画を空文字で一致させ、ハイドレーション不一致を防ぐ）
+  const [origin, setOrigin] = React.useState('');
+  React.useEffect(() => { setOrigin(window.location.origin); }, []);
 
   const loadBatches = React.useCallback(async () => {
     setLoadingB(true);
@@ -219,7 +222,8 @@ export function InboxClient() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {b.drafts > 0 && <Badge variant="muted">未処理 {b.drafts}</Badge>}
-                    {b.advanced > 0 && <Badge variant="info">出品へ {b.advanced}</Badge>}
+                    {b.selling > 0 && <Badge variant="success">出品中 {b.selling}</Badge>}
+                    {b.advanced - b.selling > 0 && <Badge variant="info">出品へ {b.advanced - b.selling}</Badge>}
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </CardContent>

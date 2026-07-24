@@ -33,7 +33,8 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
     email: text('email').notNull().unique(),
-    passwordHash: text('password_hash'), // 招待受諾までは NULL
+    passwordHash: text('password_hash'), // 【非推奨】旧パスワード認証の名残。Googleログイン移行後は未使用（列は保持）
+    googleSub: text('google_sub').unique(), // Googleアカウントの sub。初回Googleログイン時にメール一致で紐付け
     fullName: text('full_name'),
     role: text('role').notNull(), // owner | tenant_admin | member | operator
     status: text('status').notNull().default('invited'), // invited | active | suspended
@@ -325,6 +326,21 @@ export const ipBrands = pgTable(
   },
   (t) => ({ tenantIdx: index('ip_brands_tenant_idx').on(t.tenantId) }),
 );
+
+// Coupangカテゴリのメタ情報キャッシュ（全テナント共通の参照データ＝tenant_idなし、fx_rates同様）。
+// 商品登録の必須 notices(상품정보제공고시)/attributes/書類は「カテゴリ駆動」なので、
+// Category Metadata Query の結果を displayCategoryCode ごとに貯める。
+export const coupangCategoryMeta = pgTable('coupang_category_meta', {
+  displayCategoryCode: integer('display_category_code').primaryKey(),
+  categoryName: text('category_name'),
+  noticeCategories: jsonb('notice_categories'), // 상품정보제공고시 の必須項目
+  attributes: jsonb('attributes'), // カテゴリ必須属性
+  requiredDocuments: jsonb('required_documents'), // 認証/書類
+  admissible: boolean('admissible'), // 加盟者が必須書類を満たせる見込みか（null=未判定）
+  raw: jsonb('raw'),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type CoupangCategoryMeta = typeof coupangCategoryMeta.$inferSelect;
 
 // Chrome拡張用のテナント別トークン（拡張からの取込認証）。生トークンはハッシュ保存。
 export const tenantTokens = pgTable(

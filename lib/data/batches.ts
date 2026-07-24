@@ -30,7 +30,8 @@ export async function listBatches(tenantId: string) {
       SELECT b.id, b.query, b.source, b.url, b.captured_at AS "capturedAt", b.created_at AS "createdAt",
              COUNT(cl.id)::int AS total,
              COUNT(cl.id) FILTER (WHERE cl.status = 'draft')::int AS drafts,
-             COUNT(cl.id) FILTER (WHERE cl.status <> 'draft')::int AS advanced
+             COUNT(cl.id) FILTER (WHERE cl.status <> 'draft')::int AS advanced,
+             COUNT(cl.id) FILTER (WHERE cl.status = 'submitted' AND cl.coupang_approval_status IN ('approved','partial_approved') AND (cl.coupang_sales_status = 'on_sale' OR cl.coupang_sales_status IS NULL))::int AS selling
       FROM ingest_batches b
       LEFT JOIN channel_listings cl ON cl.ingest_batch_id = b.id AND cl.deleted_at IS NULL
       WHERE b.tenant_id = ${tenantId}
@@ -47,6 +48,7 @@ export async function listBatches(tenantId: string) {
       total: Number(r.total),
       drafts: Number(r.drafts),
       advanced: Number(r.advanced),
+      selling: Number(r.selling),
     }));
 
     // グループ外（手動追加など batch_id null）の draft を擬似グループとして先頭に
@@ -68,6 +70,7 @@ export async function listBatches(tenantId: string) {
         total: orphanN,
         drafts: orphanN,
         advanced: 0,
+        selling: 0,
       });
     }
     return batches;

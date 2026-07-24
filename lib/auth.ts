@@ -2,7 +2,6 @@
 // 既存の SessionUser / Role の「形」は維持し、画面側を無改修にする。
 import { cookies } from 'next/headers';
 import { createHash, randomBytes } from 'node:crypto';
-import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { sessions, users, tenants } from '@/lib/db/schema';
@@ -23,20 +22,14 @@ export function hashToken(raw: string): string {
     .digest('hex');
 }
 
-export function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
-}
-
-export function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
+// パスワード認証は廃止（Googleログインへ移行）
 
 // ─── セッション ────────────────────────────────────────
 export async function createSession(userId: string): Promise<void> {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * SESSION_DAYS);
   await db.insert(sessions).values({ tokenHash: hashToken(token), userId, expiresAt });
-  cookies().set(COOKIE_NAME, token, {
+  (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
@@ -46,16 +39,16 @@ export async function createSession(userId: string): Promise<void> {
 }
 
 export async function destroySession(): Promise<void> {
-  const c = cookies().get(COOKIE_NAME);
+  const c = (await cookies()).get(COOKIE_NAME);
   if (c?.value) {
     await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(c.value)));
   }
-  cookies().delete(COOKIE_NAME);
+  (await cookies()).delete(COOKIE_NAME);
 }
 
 // セッションCookie → SessionUser を組み立てる（期限切れ/不正は null）
 export async function getSession(): Promise<SessionUser | null> {
-  const c = cookies().get(COOKIE_NAME);
+  const c = (await cookies()).get(COOKIE_NAME);
   if (!c?.value) return null;
 
   const rows = await db

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { listingStatusView, listingActions, type ListingGroup } from '@/lib/listing-status';
+import { amazonFetchErrorMessage } from '@/lib/errors';
 
 type Listing = {
   id: string;
@@ -99,7 +100,7 @@ export function ListingsClient() {
       setB(key, false);
     }
   };
-  const doProcess = async (id: string) => { const r = await act(id, 'process'); setMsg(r.ok ? '出品準備しました（取得・翻訳・価格）' : (r.json as { error?: string }).error === 'NOT_PROCESSABLE' ? '審査中／販売中は再処理できません' : '処理に失敗'); load(); };
+  const doProcess = async (id: string) => { const r = await act(id, 'process'); const err = (r.json as { error?: string }).error; setMsg(r.ok ? '出品準備しました（取得・翻訳・価格）' : err === 'NOT_PROCESSABLE' ? '審査中／販売中は再処理できません' : amazonFetchErrorMessage(err)); load(); };
   const doPreview = async (id: string) => { const r = await act(id, 'preview'); if (r.ok) setPreview({ id, data: r.json as PreviewData }); else setMsg((r.json as { error?: string }).error ?? 'プレビュー失敗'); };
   const doSubmit = async (id: string) => {
     const r = await act(id, 'submit');

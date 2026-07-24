@@ -57,6 +57,20 @@
       "when": 1779621945830,
       "tag": "0007_serious_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784807282049,
+      "tag": "0008_overjoyed_paibok",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784902680944,
+      "tag": "0009_steep_doctor_octopus",
+      "breakpoints": true
     }
   ]
 }
