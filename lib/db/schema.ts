@@ -342,6 +342,55 @@ export const coupangCategoryMeta = pgTable('coupang_category_meta', {
 });
 export type CoupangCategoryMeta = typeof coupangCategoryMeta.$inferSelect;
 
+// CS問い合わせ（テナント別。Coupang callCenterInquiries 等をポーリング取込）。RLS対象。
+export const csInquiries = pgTable(
+  'cs_inquiries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull().default('coupang'),
+    channelInquiryId: text('channel_inquiry_id').notNull(),
+    type: text('type'), // callCenter / online 等
+    content: text('content'),
+    status: text('status').notNull().default('open'), // open / answered
+    receivedAt: timestamp('received_at', { withTimezone: true }),
+    raw: jsonb('raw'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uq: uniqueIndex('cs_inquiries_uq').on(t.tenantId, t.channel, t.channelInquiryId),
+    tenantIdx: index('cs_inquiries_tenant_idx').on(t.tenantId, t.status),
+  }),
+);
+
+// 返品リクエスト（テナント別。Coupang returnRequests をポーリング取込）。RLS対象。
+export const returnRequests = pgTable(
+  'return_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull().default('coupang'),
+    receiptId: text('receipt_id').notNull(), // Coupang returnRequests の receiptId
+    channelOrderId: text('channel_order_id'),
+    reason: text('reason'),
+    status: text('status').notNull().default('requested'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }),
+    raw: jsonb('raw'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uq: uniqueIndex('return_requests_uq').on(t.tenantId, t.channel, t.receiptId),
+    tenantIdx: index('return_requests_tenant_idx').on(t.tenantId, t.status),
+  }),
+);
+
+export type CsInquiry = typeof csInquiries.$inferSelect;
+export type ReturnRequest = typeof returnRequests.$inferSelect;
+
 // Chrome拡張用のテナント別トークン（拡張からの取込認証）。生トークンはハッシュ保存。
 export const tenantTokens = pgTable(
   'tenant_tokens',

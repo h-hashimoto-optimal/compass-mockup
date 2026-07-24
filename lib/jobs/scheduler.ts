@@ -42,6 +42,14 @@ export async function enqueueDue(): Promise<{ enqueued: number }> {
       await enqueue('auto_stop', { tenantId: t.id });
       n++;
     }
+    if (!(await hasPending('sync_cs', t.id))) {
+      await enqueue('sync_cs', { tenantId: t.id });
+      n++;
+    }
+    if (!(await hasPending('sync_returns', t.id))) {
+      await enqueue('sync_returns', { tenantId: t.id });
+      n++;
+    }
   }
   return { enqueued: n };
 }

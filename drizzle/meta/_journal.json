@@ -78,6 +78,13 @@
       "when": 1784907729032,
       "tag": "0010_red_doctor_octopus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784907984662,
+      "tag": "0011_lame_wallop",
+      "breakpoints": true
     }
   ]
 }

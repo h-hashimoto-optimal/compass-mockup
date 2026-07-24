@@ -4,6 +4,8 @@ import { scanAlerts } from '@/lib/data/alerts';
 import { crawlSourceBatch } from '@/lib/data/crawl';
 import { syncTenantOrders } from '@/lib/data/order-sync';
 import { autoStopTenant } from '@/lib/data/auto-stop';
+import { syncTenantCs } from '@/lib/data/cs-sync';
+import { syncTenantReturns } from '@/lib/data/return-sync';
 
 type Handler = (job: ClaimedJob) => Promise<void>;
 
@@ -27,6 +29,16 @@ const HANDLERS: Record<string, Handler> = {
   auto_stop: async (job) => {
     if (!job.tenantId) throw new Error('auto_stop: tenantId 必須');
     await autoStopTenant(job.tenantId);
+  },
+  // ② CS問い合わせ取り込み
+  sync_cs: async (job) => {
+    if (!job.tenantId) throw new Error('sync_cs: tenantId 必須');
+    await syncTenantCs(job.tenantId);
+  },
+  // ② 返品リクエスト取り込み
+  sync_returns: async (job) => {
+    if (!job.tenantId) throw new Error('sync_returns: tenantId 必須');
+    await syncTenantReturns(job.tenantId);
   },
 };
 
