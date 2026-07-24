@@ -38,6 +38,10 @@ export async function enqueueDue(): Promise<{ enqueued: number }> {
       await enqueue('sync_orders', { tenantId: t.id });
       n++;
     }
+    if (!(await hasPending('auto_stop', t.id))) {
+      await enqueue('auto_stop', { tenantId: t.id });
+      n++;
+    }
   }
   return { enqueued: n };
 }

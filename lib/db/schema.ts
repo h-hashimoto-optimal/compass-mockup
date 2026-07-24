@@ -415,6 +415,10 @@ export const tenantMonitoringSettings = pgTable('tenant_monitoring_settings', {
   lossBufferPct: numeric('loss_buffer_pct', { precision: 6, scale: 4 }).notNull().default('0'),
   notifyEmail: boolean('notify_email').notNull().default(false),
   notifyChatwork: boolean('notify_chatwork').notNull().default(false),
+  // 自動停止（③）：既定OFF（通知のみ）。ONなら赤字/欠品が min_age_min 継続した出品を Coupang で販売停止。
+  autoStopOnLoss: boolean('auto_stop_on_loss').notNull().default(false),
+  autoStopOnOos: boolean('auto_stop_on_oos').notNull().default(false),
+  autoStopMinAgeMin: integer('auto_stop_min_age_min').notNull().default(30), // ヒステリシス（誤停止防止）
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

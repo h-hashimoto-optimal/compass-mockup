@@ -3,6 +3,7 @@ import { claimJobs, completeJob, failJob, type ClaimedJob } from './queue';
 import { scanAlerts } from '@/lib/data/alerts';
 import { crawlSourceBatch } from '@/lib/data/crawl';
 import { syncTenantOrders } from '@/lib/data/order-sync';
+import { autoStopTenant } from '@/lib/data/auto-stop';
 
 type Handler = (job: ClaimedJob) => Promise<void>;
 
@@ -21,6 +22,11 @@ const HANDLERS: Record<string, Handler> = {
   sync_orders: async (job) => {
     if (!job.tenantId) throw new Error('sync_orders: tenantId 必須');
     await syncTenantOrders(job.tenantId);
+  },
+  // ③ 赤字/欠品が継続した販売中出品を停止（既定OFF・テナント設定次第）
+  auto_stop: async (job) => {
+    if (!job.tenantId) throw new Error('auto_stop: tenantId 必須');
+    await autoStopTenant(job.tenantId);
   },
 };
 

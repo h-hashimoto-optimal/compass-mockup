@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { jobs } from '@/lib/db/schema';
 
-export type JobType = 'scan_alerts' | 'crawl_source' | 'sync_orders';
+export type JobType = 'scan_alerts' | 'crawl_source' | 'sync_orders' | 'auto_stop';
 
 export type ClaimedJob = {
   id: number;

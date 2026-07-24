@@ -71,6 +71,13 @@
       "when": 1784902680944,
       "tag": "0009_steep_doctor_octopus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784907729032,
+      "tag": "0010_red_doctor_octopus",
+      "breakpoints": true
     }
   ]
 }
